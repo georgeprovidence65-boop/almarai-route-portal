@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Almarai Customer Help</title>
+  <style>
+    :root {
+      --green: #08783a;
+      --green-dark: #075b2c;
+      --blue: #1d638d;
+      --ink: #15212d;
+      --muted: #5d6e7e;
+      --line: #d7e1e8;
+      --paper: #ffffff;
+      --page: #f5f8f2;
+      --soft: #eaf3ee;
+      --danger: #a92736;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--page);
+      color: var(--ink);
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    header {
+      background: var(--green-dark);
+      color: white;
+      padding: 20px;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 24px;
+      letter-spacing: 0;
+    }
+
+    header p {
+      margin: 7px 0 0;
+      color: #dcefe5;
+      font-size: 14px;
+    }
+
+    .nav {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+
+    .nav a {
+      background: rgba(255, 255, 255, 0.14);
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      border-radius: 6px;
+      color: white;
+      font-size: 14px;
+      font-weight: 700;
+      min-height: 36px;
+      padding: 8px 11px;
+      text-decoration: none;
+    }
+
+    main {
+      width: min(1120px, calc(100% - 28px));
+      margin: 18px auto 36px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+      gap: 16px;
+    }
+
+    .panel {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .panel h2 {
+      margin: 0;
+      padding: 16px;
+      border-bottom: 1px solid var(--line);
+      font-size: 19px;
+    }
+
+    .panel-body {
+      padding: 16px;
+    }
+
+    .status {
+      margin-bottom: 14px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: white;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .status strong {
+      color: var(--ink);
+    }
+
+    .status.error {
+      color: var(--danger);
+    }
+
+    .status.success {
+      color: var(--green);
+    }
+
+    .categories {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+
+    .category-button,
+    button {
+      border: 0;
+      border-radius: 6px;
+      background: var(--green);
+      color: white;
+      cursor: pointer;
+      font-weight: 700;
+      min-height: 38px;
+      padding: 10px 12px;
+    }
+
+    .category-button {
+      background: var(--soft);
+      color: var(--green-dark);
+      border: 1px solid #cbe2d4;
+    }
+
+    .category-button.active {
+      background: var(--green);
+      color: white;
+      border-color: var(--green);
+    }
+
+    .product-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .product {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 13px;
+      background: #fbfcfa;
+      min-height: 104px;
+    }
+
+    .product h3 {
+      margin: 0 0 6px;
+      font-size: 16px;
+    }
+
+    .product p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    label {
+      display: block;
+      color: #2d4356;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    input,
+    select,
+    textarea {
+      width: 100%;
+      border: 1px solid #cad8e2;
+      border-radius: 6px;
+      color: var(--ink);
+      font: inherit;
+      min-height: 38px;
+      padding: 9px 10px;
+    }
+
+    textarea {
+      min-height: 118px;
+      resize: vertical;
+    }
+
+    .field {
+      margin-bottom: 12px;
+    }
+
+    .two {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .empty {
+      border: 1px dashed #c8d6df;
+      border-radius: 8px;
+      color: var(--muted);
+      padding: 18px;
+      text-align: center;
+    }
+
+    .note {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .lookup-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+    }
+
+    .customer-card {
+      display: none;
+      margin-bottom: 12px;
+      padding: 12px;
+      border: 1px solid #cbe2d4;
+      border-radius: 8px;
+      background: var(--soft);
+      color: #234638;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .customer-card strong {
+      color: var(--green-dark);
+    }
+
+    @media (max-width: 840px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+
+      .product-grid,
+      .two {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+  <style>
+    body {
+      background: radial-gradient(circle at top left, rgba(29, 84, 214, 0.2), transparent 310px), #edf3ff;
+    }
+
+    header {
+      background: linear-gradient(135deg, #063bb8, #034ed9);
+      border-radius: 0 0 26px 26px;
+      box-shadow: 0 16px 34px rgba(3, 65, 190, 0.24);
+      margin: 0 auto;
+      max-width: 560px;
+      min-height: 150px;
+    }
+
+    header h1 {
+      font-size: 26px;
+      text-transform: uppercase;
+    }
+
+    main {
+      grid-template-columns: 1fr;
+      margin-top: -30px;
+      max-width: 560px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .panel {
+      border-color: #dfe6f5;
+      box-shadow: 0 12px 28px rgba(6, 55, 150, 0.12);
+    }
+
+    .panel h2 {
+      background: #fbfcff;
+      color: #0b3fb5;
+    }
+
+    .product-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      overflow-x: auto;
+    }
+
+    .product {
+      min-width: 145px;
+      min-height: 122px;
+    }
+
+    button {
+      background: linear-gradient(135deg, #064ad0, #063bb8);
+      box-shadow: 0 8px 18px rgba(3, 65, 190, 0.18);
+    }
+
+    .category-button {
+      background: #f3f7ff;
+      color: #0b3fb5;
+      border-color: #d7e2fb;
+      box-shadow: none;
+    }
+
+    .category-button.active {
+      background: linear-gradient(135deg, #064ad0, #063bb8);
+    }
+
+    .customer-card {
+      background: #eef6ff;
+      border-color: #cfe0ff;
+      color: #17335f;
+    }
+
+    @media (max-width: 620px) {
+      main {
+        width: min(100% - 18px, 560px);
+      }
+
+      .product-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Almarai Customer Help</h1>
+    <p>Choose a product area or send a request if you are not sure what to order.</p>
+  </header>
+
+  <main>
+    <section class="panel">
+      <h2>Products</h2>
+      <div class="panel-body">
+        <div id="backendStatus" class="status"><strong>Backend:</strong> Checking...</div>
+        <div class="categories" id="categories"></div>
+        <div class="product-grid" id="products"></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Need Help Choosing?</h2>
+      <div class="panel-body">
+        <form id="requestForm">
+          <input id="customer_id" name="customer_id" type="hidden">
+
+          <div class="field">
+            <label for="customer_code">Customer ID</label>
+            <div class="lookup-row">
+              <input id="customer_code" name="customer_code" placeholder="1005806" inputmode="numeric">
+              <button type="button" onclick="lookupCustomer()">Find</button>
+            </div>
+          </div>
+
+          <div id="customerCard" class="customer-card"></div>
+
+          <div class="field">
+            <label for="customer_name">Customer Name</label>
+            <input id="customer_name" name="customer_name" placeholder="Restaurant, school, gym, hospital..." required>
+          </div>
+
+          <div class="two">
+            <div class="field">
+              <label for="phone">Phone</label>
+              <input id="phone" name="phone" placeholder="+966..." inputmode="tel">
+            </div>
+
+            <div class="field">
+              <label for="preferred_contact">Contact</label>
+              <select id="preferred_contact" name="preferred_contact">
+                <option>WhatsApp</option>
+                <option>Call</option>
+                <option>Email</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="category">Category</label>
+            <select id="category" name="category">
+              <option>Dairy</option>
+              <option>Juice</option>
+              <option>Bakery</option>
+              <option>Mixed Order</option>
+              <option>Not Sure</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="message">What do you need?</label>
+            <textarea id="message" name="message" placeholder="Example: We are a school and need milk and juice for daily supply. Please recommend the right items and quantity." required></textarea>
+          </div>
+
+          <button type="submit">Send Request</button>
+          <p class="note">After sending, the route team will see your request in the admin dashboard and contact you directly.</p>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const API = window.location.protocol === 'file:' ? 'http://localhost:5000' : window.location.origin;
+    const params = new URLSearchParams(window.location.search);
+    const pages = {
+      admin: { file: 'admin.html', route: '/admin-dashboard' },
+      customer: { file: 'customer.html', route: '/customer-page' },
+      salesman: { file: 'salesman.html', route: '/salesman-dashboard' }
+    };
+    const categoryNames = ['All', 'Dairy', 'Juice', 'Bakery', 'Other'];
+    let products = [];
+    let activeCategory = 'All';
+    let selectedCustomer = null;
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function openPage(page) {
+      window.location.href = window.location.protocol === 'file:' ? pages[page].file : pages[page].route;
+    }
+
+    function requireRole(allowedRoles) {
+      const role = localStorage.getItem('almaraiRole');
+      const token = localStorage.getItem('almaraiToken');
+
+      if (!token || !allowedRoles.includes(role)) {
+        window.location.href = window.location.protocol === 'file:' ? 'http://localhost:5000/portal-login' : '/portal-login';
+        return false;
+      }
+
+      return true;
+    }
+
+    async function api(path, options = {}) {
+      const response = await fetch(`${API}${path}`, {
+        headers: { 'Content-Type': 'application/json' },
+        ...options
+      });
+
+      const text = await response.text();
+      const data = text ? JSON.parse(text) : null;
+
+      if (!response.ok) {
+        throw new Error(data?.message || 'Request failed');
+      }
+
+      return data;
+    }
+
+    function productCategory(product) {
+      const text = `${product.name || ''} ${product.description || ''}`.toLowerCase();
+      if (text.includes('juice')) return 'Juice';
+      if (text.includes('bread') || text.includes('bakery')) return 'Bakery';
+      if (text.includes('milk') || text.includes('dairy') || text.includes('yoghurt') || text.includes('laban')) return 'Dairy';
+      return 'Other';
+    }
+
+    function renderCategories() {
+      document.getElementById('categories').innerHTML = categoryNames.map((category) => `
+        <button
+          class="category-button ${category === activeCategory ? 'active' : ''}"
+          type="button"
+          onclick="setCategory('${category}')"
+        >${category}</button>
+      `).join('');
+    }
+
+    function renderProducts() {
+      const list = activeCategory === 'All'
+        ? products
+        : products.filter((product) => productCategory(product) === activeCategory);
+
+      const target = document.getElementById('products');
+
+      if (list.length === 0) {
+        target.innerHTML = '<div class="empty">No products in this category yet. Send a request and we will guide you.</div>';
+        return;
+      }
+
+      target.innerHTML = list.map((product) => `
+        <article class="product">
+          <h3>${escapeHtml(product.name)}</h3>
+          <p>${escapeHtml(product.description || 'Available for route supply. Ask the team for the right quantity.')}</p>
+        </article>
+      `).join('');
+    }
+
+    function setCategory(category) {
+      activeCategory = category;
+      document.getElementById('category').value = category === 'All' ? 'Not Sure' : category;
+      renderCategories();
+      renderProducts();
+    }
+
+    async function loadProducts() {
+      const status = document.getElementById('backendStatus');
+
+      try {
+        products = await api('/products');
+        status.className = 'status success';
+        status.innerHTML = '<strong>Backend:</strong> Connected';
+        renderCategories();
+        renderProducts();
+      } catch (error) {
+        status.className = 'status error';
+        status.innerHTML = `<strong>Backend:</strong> ${escapeHtml(error.message)}`;
+        renderCategories();
+        renderProducts();
+      }
+    }
+
+    async function lookupCustomerFromQuery() {
+      const customerCode = params.get('customer');
+      if (!customerCode) return;
+      document.getElementById('customer_code').value = customerCode;
+      await lookupCustomer();
+    }
+
+    function renderCustomerCard(message = '') {
+      const card = document.getElementById('customerCard');
+
+      if (!selectedCustomer && !message) {
+        card.style.display = 'none';
+        card.innerHTML = '';
+        return;
+      }
+
+      card.style.display = 'block';
+
+      if (selectedCustomer) {
+        const mapLink = selectedCustomer.location_link
+          ? `<br><a href="${escapeHtml(selectedCustomer.location_link)}" target="_blank">Open saved map</a>`
+          : '';
+
+        card.innerHTML = `
+          <strong>${escapeHtml(selectedCustomer.customer_code)} - ${escapeHtml(selectedCustomer.name)}</strong><br>
+          ${escapeHtml(selectedCustomer.customer_type)} customer, route ${escapeHtml(selectedCustomer.route_number)}<br>
+          Balance: ${Number(selectedCustomer.current_balance || 0).toFixed(2)} SAR | Credit Limit: ${Number(selectedCustomer.credit_limit || 0).toFixed(2)} SAR<br>
+          ${escapeHtml(selectedCustomer.area)}${mapLink}
+        `;
+        return;
+      }
+
+      card.innerHTML = escapeHtml(message);
+    }
+
+    async function lookupCustomer() {
+      const code = document.getElementById('customer_code').value.trim();
+
+      selectedCustomer = null;
+      document.getElementById('customer_id').value = '';
+      renderCustomerCard();
+
+      if (!code) {
+        renderCustomerCard('Enter a customer ID first.');
+        return;
+      }
+
+      try {
+        selectedCustomer = await api(`/customers/by-code/${encodeURIComponent(code)}`);
+        document.getElementById('customer_id').value = selectedCustomer.id;
+        document.getElementById('customer_name').value = selectedCustomer.name;
+        document.getElementById('phone').value = selectedCustomer.contact_phone || '';
+        renderCustomerCard();
+      } catch (error) {
+        renderCustomerCard('Customer ID was not found. You can still send the request by typing the customer name.');
+      }
+    }
+
+    async function submitRequest(event) {
+      event.preventDefault();
+      const form = event.target;
+      const body = Object.fromEntries(new FormData(form).entries());
+      delete body.customer_code;
+
+      if (!body.customer_id) {
+        delete body.customer_id;
+      }
+
+      try {
+        await api('/custom-requests', {
+          method: 'POST',
+          body: JSON.stringify(body)
+        });
+
+        form.reset();
+        selectedCustomer = null;
+        renderCustomerCard();
+        document.getElementById('category').value = activeCategory === 'All' ? 'Not Sure' : activeCategory;
+        alert('Request sent. The route team will contact you.');
+      } catch (error) {
+        alert(`Could not send request: ${error.message}`);
+      }
+    }
+
+    document.getElementById('requestForm').addEventListener('submit', submitRequest);
+    if (requireRole(['customer'])) {
+      loadProducts().then(lookupCustomerFromQuery);
+    }
+  </script>
+</body>
+</html>

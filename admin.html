@@ -1,0 +1,1338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Almarai Route Admin</title>
+  <style>
+    :root {
+      --green: #0d7a3a;
+      --green-dark: #075a2a;
+      --blue: #1b5f8f;
+      --ink: #17212b;
+      --muted: #617080;
+      --line: #d9e1e7;
+      --paper: #ffffff;
+      --page: #f4f7f2;
+      --warning: #a05c00;
+      --danger: #aa2533;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--page);
+      color: var(--ink);
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    header {
+      background: var(--green-dark);
+      color: white;
+      padding: 18px 24px;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 24px;
+      letter-spacing: 0;
+    }
+
+    header p {
+      margin: 6px 0 0;
+      color: #dceee4;
+      font-size: 14px;
+    }
+
+    main {
+      width: min(1380px, calc(100% - 32px));
+      margin: 20px auto 40px;
+    }
+
+    .toolbar,
+    .panel {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 14px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .status {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      border: 0;
+      border-radius: 6px;
+      background: var(--green);
+      color: white;
+      cursor: pointer;
+      font-weight: 700;
+      padding: 10px 12px;
+      min-height: 38px;
+    }
+
+    button.secondary {
+      background: var(--blue);
+    }
+
+    button.danger {
+      background: var(--danger);
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(160px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .metric {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+    }
+
+    .metric span {
+      color: var(--muted);
+      display: block;
+      font-size: 13px;
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 26px;
+      margin-top: 6px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .panel {
+      overflow: hidden;
+    }
+
+    .panel h2 {
+      align-items: center;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      font-size: 18px;
+      justify-content: space-between;
+      margin: 0;
+      padding: 14px 16px;
+    }
+
+    .panel-body {
+      padding: 14px 16px 16px;
+    }
+
+    form {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      margin-bottom: 14px;
+    }
+
+    form .wide {
+      grid-column: 1 / -1;
+    }
+
+    label {
+      color: var(--muted);
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 5px;
+    }
+
+    input,
+    select,
+    textarea {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      font: inherit;
+      min-height: 38px;
+      padding: 8px 10px;
+      width: 100%;
+    }
+
+    textarea {
+      min-height: 76px;
+      resize: vertical;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    table {
+      border-collapse: collapse;
+      min-width: 100%;
+      width: 100%;
+    }
+
+    th,
+    td {
+      border-top: 1px solid var(--line);
+      font-size: 13px;
+      padding: 10px;
+      text-align: left;
+      vertical-align: top;
+      white-space: nowrap;
+    }
+
+    th {
+      background: #eef5ef;
+      color: #314253;
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+
+    td.wrap {
+      max-width: 280px;
+      white-space: normal;
+    }
+
+    .pill {
+      border-radius: 999px;
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 8px;
+    }
+
+    .pill.cash {
+      background: #e7f4ec;
+      color: var(--green-dark);
+    }
+
+    .pill.credit {
+      background: #e9f0f8;
+      color: var(--blue);
+    }
+
+    .empty {
+      color: var(--muted);
+      padding: 16px 10px;
+    }
+
+    a {
+      color: var(--blue);
+      font-weight: 700;
+      text-decoration: none;
+    }
+
+    .error {
+      color: var(--danger);
+    }
+
+    .warning {
+      color: var(--warning);
+    }
+
+    @media (max-width: 980px) {
+      .summary,
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 620px) {
+      main {
+        width: min(100% - 20px, 1380px);
+      }
+
+      form {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+  <style>
+    body {
+      background: linear-gradient(90deg, #150b64 0 76px, transparent 76px), #f6f7fb;
+      padding-left: 76px;
+    }
+
+    body::before {
+      content: "☰\A⌂\A▣\A📦\A▤\A⚙";
+      position: fixed;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 76px;
+      background: linear-gradient(180deg, #12035b, #230b88);
+      color: white;
+      font-size: 22px;
+      line-height: 58px;
+      padding-top: 84px;
+      text-align: center;
+      white-space: pre;
+      z-index: 1;
+    }
+
+    header {
+      background: linear-gradient(135deg, #1b0b85, #5526d9);
+      border-radius: 0 0 18px 18px;
+      box-shadow: 0 16px 34px rgba(41, 20, 110, 0.2);
+      margin: 0 auto;
+      width: min(1380px, calc(100% - 32px));
+    }
+
+    .toolbar,
+    .metric,
+    .panel {
+      border-color: #e4e7f2;
+      box-shadow: 0 10px 26px rgba(24, 18, 74, 0.08);
+    }
+
+    .metric strong {
+      color: #173b92;
+      font-size: 30px;
+    }
+
+    .metric:nth-child(4) strong {
+      color: #d90f20;
+    }
+
+    .panel h2 {
+      background: #fbfbff;
+      color: #160f5f;
+    }
+
+    button {
+      background: linear-gradient(135deg, #123fbd, #0638c9);
+      box-shadow: 0 8px 18px rgba(16, 69, 180, 0.18);
+    }
+
+    button.secondary {
+      background: linear-gradient(135deg, #5c25d8, #2b0c91);
+    }
+
+    button.danger {
+      background: #b0243b;
+    }
+
+    th {
+      background: #f0f4ff;
+      color: #1b2260;
+    }
+
+    a {
+      color: #073fb8;
+      font-weight: 700;
+    }
+
+    @media (max-width: 840px) {
+      body {
+        background: #f6f7fb;
+        padding-left: 0;
+      }
+
+      body::before {
+        display: none;
+      }
+
+      header {
+        border-radius: 0 0 16px 16px;
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Almarai Manager Portal</h1>
+    <p>Areas, users, products, pricing, customers, QR codes, orders, and follow-up requests.</p>
+  </header>
+
+  <main>
+    <section class="toolbar">
+      <div>
+        <strong>Backend:</strong>
+        <span class="status" id="apiStatus">Checking...</span>
+      </div>
+      <div class="actions">
+        <button class="secondary" type="button" onclick="openCompanyQr()">Company QR</button>
+        <button type="button" onclick="loadAll()">Refresh</button>
+      </div>
+    </section>
+
+    <section class="summary">
+      <div class="metric">
+        <span>Products</span>
+        <strong id="productCount">0</strong>
+      </div>
+      <div class="metric">
+        <span>Orders</span>
+        <strong id="orderCount">0</strong>
+      </div>
+      <div class="metric">
+        <span>Route Customers</span>
+        <strong id="customerCount">0</strong>
+      </div>
+      <div class="metric">
+        <span>Pending Requests</span>
+        <strong id="requestCount">0</strong>
+      </div>
+    </section>
+
+    <section class="grid">
+      <article class="panel">
+        <h2>Areas</h2>
+        <div class="panel-body">
+          <form id="areaForm">
+            <div>
+              <label for="area_route_number">Route</label>
+              <input id="area_route_number" name="route_number" placeholder="950" required>
+            </div>
+            <div>
+              <label for="area_name">Area Name</label>
+              <input id="area_name" name="area_name" placeholder="Wadi Laban" required>
+            </div>
+            <div>
+              <label for="area_city">City</label>
+              <input id="area_city" name="city" value="Riyadh">
+            </div>
+            <div class="wide">
+              <label for="area_notes">Notes</label>
+              <textarea id="area_notes" name="notes" placeholder="Route notes, coverage, delivery day..."></textarea>
+            </div>
+            <div class="wide">
+              <button type="submit">Add Area</button>
+            </div>
+          </form>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Route</th>
+                  <th>Area</th>
+                  <th>City</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody id="areasTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </article>
+
+      <article class="panel">
+        <h2>System Users</h2>
+        <div class="panel-body">
+          <form id="userForm">
+            <div>
+              <label for="user_full_name">Name</label>
+              <input id="user_full_name" name="full_name" placeholder="Salesman name" required>
+            </div>
+            <div>
+              <label for="user_phone">Login Phone</label>
+              <input id="user_phone" name="phone" placeholder="05..." required>
+            </div>
+            <div>
+              <label for="user_password">Password</label>
+              <input id="user_password" name="password" type="password" required>
+            </div>
+            <div>
+              <label for="user_role">Role</label>
+              <select id="user_role" name="role">
+                <option value="salesman">salesman</option>
+                <option value="manager">manager</option>
+                <option value="admin">admin</option>
+                <option value="customer">customer</option>
+              </select>
+            </div>
+            <div class="wide">
+              <button type="submit">Create User Login</button>
+            </div>
+          </form>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Name</th>
+                  <th>Phone</th>
+                  <th>Role</th>
+                </tr>
+              </thead>
+              <tbody id="usersTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </article>
+
+      <article class="panel">
+        <h2>Customers</h2>
+        <div class="panel-body">
+          <form id="customerForm">
+            <div>
+              <label for="customer_code">Customer ID</label>
+              <input id="customer_code" name="customer_code" placeholder="1005806" required>
+            </div>
+            <div>
+              <label for="name">Customer Name</label>
+              <input id="name" name="name" placeholder="ALROMANSIAH" required>
+            </div>
+            <div>
+              <label for="customer_type">Type</label>
+              <select id="customer_type" name="customer_type">
+                <option value="C">C - Cash</option>
+                <option value="CD">CD - Credit</option>
+              </select>
+            </div>
+            <div>
+              <label for="current_balance">Balance</label>
+              <input id="current_balance" name="current_balance" type="number" step="0.01" value="0">
+            </div>
+            <div>
+              <label for="credit_limit">Credit Limit</label>
+              <input id="credit_limit" name="credit_limit" type="number" step="0.01" value="0">
+            </div>
+            <div>
+              <label for="route_number">Route</label>
+              <input id="route_number" name="route_number" value="950">
+            </div>
+            <div>
+              <label for="area">Area</label>
+              <input id="area" name="area" value="Wadi Laban, Riyadh">
+            </div>
+            <div>
+              <label for="contact_phone">Phone</label>
+              <input id="contact_phone" name="contact_phone" placeholder="+966...">
+            </div>
+            <div class="wide">
+              <label for="location_link">Google Maps Link</label>
+              <input id="location_link" name="location_link" placeholder="https://goo.gl/maps/...">
+            </div>
+            <div class="wide">
+              <label for="notes">Notes</label>
+              <textarea id="notes" name="notes" placeholder="Restaurant, school, gym, hospital, usual products..."></textarea>
+            </div>
+            <div class="wide">
+              <button type="submit">Add Customer</button>
+            </div>
+          </form>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Name</th>
+                  <th>Type</th>
+                  <th>Balance</th>
+                  <th>Route</th>
+                  <th>Area</th>
+                  <th>Location</th>
+                  <th>Notes</th>
+                  <th>QR</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="customersTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </article>
+
+      <article class="panel">
+        <h2>Need Help Requests</h2>
+        <div class="panel-body">
+          <form id="requestForm">
+            <div>
+              <label for="request_customer_name">Customer Name</label>
+              <input id="request_customer_name" name="customer_name" placeholder="Customer name" required>
+            </div>
+            <div>
+              <label for="request_phone">Phone</label>
+              <input id="request_phone" name="phone" placeholder="+966...">
+            </div>
+            <div>
+              <label for="request_category">Category</label>
+              <select id="request_category" name="category">
+                <option value="Dairy">Dairy</option>
+                <option value="Juice">Juice</option>
+                <option value="Bakery">Bakery</option>
+                <option value="Mixed Order">Mixed Order</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div>
+              <label for="preferred_contact">Contact</label>
+              <select id="preferred_contact" name="preferred_contact">
+                <option value="WhatsApp">WhatsApp</option>
+                <option value="Call">Call</option>
+                <option value="Email">Email</option>
+              </select>
+            </div>
+            <div class="wide">
+              <label for="message">Customer Need</label>
+              <textarea id="message" name="message" placeholder="Customer is not sure what to order. Need recommendation..." required></textarea>
+            </div>
+            <div class="wide">
+              <button type="submit">Add Request</button>
+            </div>
+          </form>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Customer</th>
+                  <th>Category</th>
+                  <th>Need</th>
+                  <th>Route</th>
+                  <th>Location</th>
+                  <th>Contact</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="requestsTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </article>
+
+      <article class="panel">
+        <h2>Products</h2>
+        <div class="panel-body">
+          <form id="productForm">
+            <div>
+              <label for="product_name">Product</label>
+              <input id="product_name" name="name" placeholder="Almarai Fresh Milk 1L" required>
+            </div>
+            <div>
+              <label for="price">Price</label>
+              <input id="price" name="price" type="number" step="0.01" value="0">
+            </div>
+            <div>
+              <label for="stock_quantity">Stock</label>
+              <input id="stock_quantity" name="stock_quantity" type="number" value="0">
+            </div>
+            <div>
+              <label for="image_url">Image URL</label>
+              <input id="image_url" name="image_url" placeholder="https://...">
+            </div>
+            <div class="wide">
+              <label for="description">Description</label>
+              <textarea id="description" name="description" placeholder="Usual product sold to restaurants, schools, gyms, hospitals..."></textarea>
+            </div>
+            <div class="wide">
+              <button type="submit">Add Product</button>
+            </div>
+          </form>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Product</th>
+                  <th>Price</th>
+                  <th>Stock</th>
+                  <th>Description</th>
+                  <th>Pricing</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="productsTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </article>
+
+      <article class="panel">
+        <h2>Route Stock Ledger</h2>
+        <div class="panel-body">
+          <form id="stockForm">
+            <div>
+              <label for="stock_route_number">Route</label>
+              <input id="stock_route_number" name="route_number" value="950">
+            </div>
+            <div>
+              <label for="stock_product_id">Product</label>
+              <select id="stock_product_id" name="product_id" required></select>
+            </div>
+            <div>
+              <label for="movement_type">Movement</label>
+              <select id="movement_type" name="movement_type">
+                <option value="opening">Opening Load</option>
+                <option value="depot_received">Received From Depot</option>
+                <option value="transfer_in">Transfer In</option>
+                <option value="transfer_out">Transfer Out</option>
+                <option value="delivered">Delivered</option>
+                <option value="returned">Returns</option>
+              </select>
+            </div>
+            <div>
+              <label for="stock_quantity_input">Quantity</label>
+              <input id="stock_quantity_input" name="quantity" type="number" min="1" value="1">
+            </div>
+            <div class="wide">
+              <label for="stock_notes">Notes</label>
+              <input id="stock_notes" name="notes" placeholder="Depot load, transfer, delivery, return...">
+            </div>
+            <div class="wide">
+              <button type="submit">Record Stock Movement</button>
+            </div>
+          </form>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th>Opening</th>
+                  <th>Depot</th>
+                  <th>In</th>
+                  <th>Out</th>
+                  <th>Delivered</th>
+                  <th>Returns</th>
+                  <th>Closing</th>
+                </tr>
+              </thead>
+              <tbody id="stockTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </article>
+
+      <article class="panel">
+        <h2>Orders</h2>
+        <div class="panel-body">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Order</th>
+                  <th>Customer</th>
+                  <th>Phone</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                  <th>Date</th>
+                </tr>
+              </thead>
+              <tbody id="ordersTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </article>
+
+      <article class="panel">
+        <h2>Salesman Stock Support</h2>
+        <div class="panel-body">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Type</th>
+                  <th>Source</th>
+                  <th>From</th>
+                  <th>To</th>
+                  <th>Product</th>
+                  <th>Qty</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="transfersTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    const API = window.location.protocol === 'file:' ? 'http://localhost:5000' : window.location.origin;
+    const pages = {
+      admin: { file: 'admin.html', route: '/admin-dashboard' },
+      customer: { file: 'customer.html', route: '/customer-page' },
+      salesman: { file: 'salesman.html', route: '/salesman-dashboard' }
+    };
+
+    let products = [];
+    let orders = [];
+    let customers = [];
+    let requests = [];
+    let areas = [];
+    let users = [];
+    let transfers = [];
+    let routeStock = [];
+
+    function escapeHtml(value) {
+      return String(value || '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function openPage(page) {
+      window.location.href = window.location.protocol === 'file:' ? pages[page].file : pages[page].route;
+    }
+
+    function requireRole(allowedRoles) {
+      const role = localStorage.getItem('almaraiRole');
+      const token = localStorage.getItem('almaraiToken');
+
+      if (!token || !allowedRoles.includes(role)) {
+        window.location.href = window.location.protocol === 'file:' ? 'http://localhost:5000/portal-login' : '/portal-login';
+        return false;
+      }
+
+      return true;
+    }
+
+    function portalBase() {
+      return window.location.protocol === 'file:' ? 'http://localhost:5000' : window.location.origin;
+    }
+
+    function openQr(data, title) {
+      window.open(`${portalBase()}/qr?data=${encodeURIComponent(data)}&title=${encodeURIComponent(title)}`, '_blank');
+    }
+
+    function openCompanyQr() {
+      openQr(`${portalBase()}/portal-login`, 'Almarai Company Portal');
+    }
+
+    function openCustomerQr(customerCode, customerName) {
+      openQr(`${portalBase()}/portal-login?customer=${encodeURIComponent(customerCode)}`, `${customerCode} ${customerName}`);
+    }
+
+    async function api(path, options = {}) {
+      const token = localStorage.getItem('almaraiToken');
+      const response = await fetch(`${API}${path}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(options.headers || {})
+        },
+        ...options
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Request failed');
+      }
+
+      return data;
+    }
+
+    function setStatus(message, type = '') {
+      const el = document.getElementById('apiStatus');
+      el.textContent = message;
+      el.className = `status ${type}`;
+    }
+
+    function formData(form) {
+      return Object.fromEntries(new FormData(form).entries());
+    }
+
+    function updateSummary() {
+      document.getElementById('productCount').textContent = products.length;
+      document.getElementById('orderCount').textContent = orders.length;
+      document.getElementById('customerCount').textContent = customers.length;
+      document.getElementById('requestCount').textContent =
+        requests.filter((request) => request.status !== 'Handled').length;
+    }
+
+    function renderAreas() {
+      const tbody = document.getElementById('areasTable');
+
+      if (areas.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="empty">No areas yet.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = areas.map((area) => `
+        <tr>
+          <td>${escapeHtml(area.route_number)}</td>
+          <td>${escapeHtml(area.area_name)}</td>
+          <td>${escapeHtml(area.city)}</td>
+          <td class="wrap">${escapeHtml(area.notes)}</td>
+        </tr>
+      `).join('');
+
+      const routeInput = document.getElementById('route_number');
+      routeInput.setAttribute('list', 'areaRoutes');
+
+      let datalist = document.getElementById('areaRoutes');
+      if (!datalist) {
+        datalist = document.createElement('datalist');
+        datalist.id = 'areaRoutes';
+        document.body.appendChild(datalist);
+      }
+
+      datalist.innerHTML = areas.map((area) => `
+        <option value="${escapeHtml(area.route_number)}">${escapeHtml(area.area_name)}, ${escapeHtml(area.city)}</option>
+      `).join('');
+    }
+
+    function renderUsers() {
+      const tbody = document.getElementById('usersTable');
+
+      if (users.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="empty">No users loaded. Login as manager to view users.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = users.map((user) => `
+        <tr>
+          <td>${user.id}</td>
+          <td>${escapeHtml(user.full_name)}</td>
+          <td>${escapeHtml(user.phone)}</td>
+          <td>${escapeHtml(user.role)}</td>
+        </tr>
+      `).join('');
+    }
+
+    function renderCustomers() {
+      const tbody = document.getElementById('customersTable');
+
+      if (customers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="10" class="empty">No route customers yet.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = customers.map((customer) => {
+        const typeClass = customer.customer_type === 'CD' ? 'credit' : 'cash';
+        const typeLabel = customer.customer_type === 'CD' ? 'CD - Credit' : 'C - Cash';
+        const location = customer.location_link
+          ? `<a href="${escapeHtml(customer.location_link)}" target="_blank">Open Map</a>`
+          : '<span class="warning">No link</span>';
+
+        return `
+          <tr>
+            <td>${escapeHtml(customer.customer_code)}</td>
+            <td>${escapeHtml(customer.name)}</td>
+            <td><span class="pill ${typeClass}">${typeLabel}</span></td>
+            <td>${Number(customer.current_balance || 0).toFixed(2)} / ${Number(customer.credit_limit || 0).toFixed(2)} SAR</td>
+            <td>${escapeHtml(customer.route_number)}</td>
+            <td>${escapeHtml(customer.area)}</td>
+            <td>${location}</td>
+            <td class="wrap">${escapeHtml(customer.notes)}</td>
+            <td><button class="secondary" type="button" onclick="openCustomerQr('${escapeHtml(customer.customer_code)}', '${escapeHtml(customer.name)}')">QR</button></td>
+            <td><button class="danger" type="button" onclick="deleteCustomer(${customer.id})">Delete</button></td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function renderRequests() {
+      const tbody = document.getElementById('requestsTable');
+
+      if (requests.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="empty">No help requests yet.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = requests.map((request) => {
+        const location = request.location_link
+          ? `<a href="${escapeHtml(request.location_link)}" target="_blank">Open Map</a>`
+          : '<span class="warning">No link</span>';
+
+        return `
+          <tr>
+            <td>${request.id}</td>
+            <td>${escapeHtml(request.customer_name)}<br><span class="status">${escapeHtml(request.phone)}</span></td>
+            <td>${escapeHtml(request.category)}</td>
+            <td class="wrap">${escapeHtml(request.message)}</td>
+            <td>${escapeHtml(request.route_number || '')}</td>
+            <td>${location}</td>
+            <td>${escapeHtml(request.preferred_contact)}</td>
+            <td>
+              <select onchange="updateRequestStatus(${request.id}, this.value)">
+                ${['Pending', 'Contacted', 'Handled', 'Cancelled'].map((status) => `
+                  <option value="${status}" ${request.status === status ? 'selected' : ''}>${status}</option>
+                `).join('')}
+              </select>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function renderProducts() {
+      const tbody = document.getElementById('productsTable');
+
+      if (products.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty">No products yet.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = products.map((product) => `
+        <tr>
+          <td>${product.id}</td>
+          <td>${escapeHtml(product.name)}</td>
+          <td>${Number(product.price || 0).toFixed(2)} SAR</td>
+          <td>${escapeHtml(product.stock_quantity)}</td>
+          <td class="wrap">${escapeHtml(product.description)}</td>
+          <td><button class="secondary" type="button" onclick="editProduct(${product.id})">Edit Price</button></td>
+          <td><button class="danger" type="button" onclick="deleteProduct(${product.id})">Delete</button></td>
+        </tr>
+      `).join('');
+
+      const stockProduct = document.getElementById('stock_product_id');
+      if (stockProduct) {
+        stockProduct.innerHTML = products.map((product) => `
+          <option value="${product.id}">${escapeHtml(product.name)}</option>
+        `).join('');
+      }
+    }
+
+    function renderRouteStock() {
+      const tbody = document.getElementById('stockTable');
+
+      if (routeStock.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="empty">No route stock recorded today.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = routeStock.map((stock) => `
+        <tr>
+          <td>${escapeHtml(stock.product_name)}</td>
+          <td>${escapeHtml(stock.opening_quantity)}</td>
+          <td>${escapeHtml(stock.received_quantity)}</td>
+          <td>${escapeHtml(stock.transferred_in_quantity)}</td>
+          <td>${escapeHtml(stock.transferred_out_quantity)}</td>
+          <td>${escapeHtml(stock.delivered_quantity)}</td>
+          <td>${escapeHtml(stock.returned_quantity)}</td>
+          <td><strong>${escapeHtml(stock.closing_quantity)}</strong></td>
+        </tr>
+      `).join('');
+    }
+
+    function renderTransfers() {
+      const tbody = document.getElementById('transfersTable');
+
+      if (transfers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="empty">No stock support or transfer requests yet.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = transfers.map((transfer) => `
+        <tr>
+          <td>${transfer.id}</td>
+          <td>${escapeHtml(transfer.request_type)}</td>
+          <td>${escapeHtml(transfer.source_type)}</td>
+          <td>${escapeHtml(transfer.from_salesman || transfer.from_route)}</td>
+          <td>${escapeHtml(transfer.to_salesman || transfer.to_route)}</td>
+          <td>${escapeHtml(transfer.product)}</td>
+          <td>${escapeHtml(transfer.quantity)} ${escapeHtml(transfer.unit)}</td>
+          <td>${escapeHtml(transfer.status)}</td>
+        </tr>
+      `).join('');
+    }
+
+    function applyRouteArea() {
+      const route = document.getElementById('route_number').value.trim();
+      const area = areas.find((item) => item.route_number === route);
+      if (area) {
+        document.getElementById('area').value = `${area.area_name}, ${area.city}`;
+      }
+    }
+
+    function renderOrders() {
+      const tbody = document.getElementById('ordersTable');
+
+      if (orders.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="empty">No orders yet.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = orders.map((order) => `
+        <tr>
+          <td>#${order.id}</td>
+          <td>${escapeHtml(order.customer_name || `User ${order.user_id || ''}`)}</td>
+          <td>${escapeHtml(order.customer_phone)}</td>
+          <td>${Number(order.total_amount || 0).toFixed(2)} SAR</td>
+          <td>
+            <select onchange="updateOrderStatus(${order.id}, this.value)">
+              ${['Pending', 'Processing', 'Delivered', 'Cancelled'].map((status) => `
+                <option value="${status}" ${order.status === status ? 'selected' : ''}>${status}</option>
+              `).join('')}
+            </select>
+          </td>
+          <td>${order.created_at ? new Date(order.created_at).toLocaleString() : ''}</td>
+        </tr>
+      `).join('');
+    }
+
+    async function loadAll() {
+      try {
+        setStatus('Loading...');
+        [products, orders, customers, requests, areas] = await Promise.all([
+          api('/admin/products'),
+          api('/admin/orders'),
+          api('/admin/customers'),
+          api('/admin/custom-requests'),
+          api('/admin/areas')
+        ]);
+
+        try {
+          users = await api('/admin/users');
+        } catch (error) {
+          users = [];
+        }
+
+        try {
+          transfers = await api('/salesman/transfers');
+        } catch (error) {
+          transfers = [];
+        }
+
+        try {
+          routeStock = await api('/route-stock?route=950');
+        } catch (error) {
+          routeStock = [];
+        }
+
+        renderProducts();
+        renderRouteStock();
+        renderOrders();
+        renderCustomers();
+        renderRequests();
+        renderAreas();
+        renderUsers();
+        renderTransfers();
+        updateSummary();
+        setStatus('Connected');
+      } catch (error) {
+        setStatus(error.message, 'error');
+      }
+    }
+
+    async function addCustomer(event) {
+      event.preventDefault();
+
+      try {
+        await api('/admin/customers', {
+          method: 'POST',
+          body: JSON.stringify(formData(event.target))
+        });
+        event.target.reset();
+        document.getElementById('route_number').value = '950';
+        document.getElementById('area').value = 'Wadi Laban, Riyadh';
+        document.getElementById('current_balance').value = 0;
+        document.getElementById('credit_limit').value = 0;
+        await loadAll();
+      } catch (error) {
+        setStatus(error.message, 'error');
+      }
+    }
+
+    async function addArea(event) {
+      event.preventDefault();
+      const form = event.target;
+      const data = formData(form);
+
+      try {
+        await api('/admin/areas', {
+          method: 'POST',
+          body: JSON.stringify(data)
+        });
+
+        form.reset();
+        document.getElementById('area_city').value = 'Riyadh';
+        await loadAll();
+      } catch (error) {
+        setStatus(error.message, 'error');
+      }
+    }
+
+    async function addUser(event) {
+      event.preventDefault();
+      const form = event.target;
+      const data = formData(form);
+
+      try {
+        await api('/admin/users', {
+          method: 'POST',
+          body: JSON.stringify(data)
+        });
+
+        form.reset();
+        await loadAll();
+      } catch (error) {
+        setStatus(error.message, 'error');
+      }
+    }
+
+    async function deleteCustomer(id) {
+      if (!confirm('Delete this customer?')) return;
+
+      try {
+        await api(`/admin/customers/${id}`, { method: 'DELETE' });
+        await loadAll();
+      } catch (error) {
+        setStatus(error.message, 'error');
+      }
+    }
+
+    async function addRequest(event) {
+      event.preventDefault();
+
+      try {
+        await api('/custom-requests', {
+          method: 'POST',
+          body: JSON.stringify(formData(event.target))
+        });
+        event.target.reset();
+        await loadAll();
+      } catch (error) {
+        setStatus(error.message, 'error');
+      }
+    }
+
+    async function updateRequestStatus(id, status) {
+      try {
+        await api(`/admin/custom-requests/${id}/status`, {
+          method: 'PATCH',
+          body: JSON.stringify({ status })
+        });
+        await loadAll();
+      } catch (error) {
+        setStatus(error.message, 'error');
+      }
+    }
+
+    async function addProduct(event) {
+      event.preventDefault();
+      const data = formData(event.target);
+      data.price = Number(data.price || 0);
+      data.stock_quantity = Number(data.stock_quantity || 0);
+
+      try {
+        await api('/admin/products', {
+          method: 'POST',
+          body: JSON.stringify(data)
+        });
+        event.target.reset();
+        document.getElementById('price').value = 0;
+        document.getElementById('stock_quantity').value = 0;
+        await loadAll();
+      } catch (error) {
+        setStatus(error.message, 'error');
+      }
+    }
+
+    async function addStockMovement(event) {
+      event.preventDefault();
+      const data = formData(event.target);
+      data.quantity = Number(data.quantity || 0);
+      data.product_id = Number(data.product_id || 0);
+
+      try {
+        await api('/route-stock/movement', {
+          method: 'POST',
+          body: JSON.stringify(data)
+        });
+
+        document.getElementById('stock_quantity_input').value = 1;
+        document.getElementById('stock_notes').value = '';
+        await loadAll();
+      } catch (error) {
+        setStatus(error.message, 'error');
+      }
+    }
+
+    async function editProduct(id) {
+      const product = products.find((item) => item.id === id);
+      if (!product) return;
+
+      const price = prompt('Enter new price', Number(product.price || 0).toFixed(2));
+      if (price === null) return;
+
+      const stock = prompt('Enter stock quantity', product.stock_quantity || 0);
+      if (stock === null) return;
+
+      try {
+        await api(`/admin/products/${id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            name: product.name,
+            description: product.description,
+            price: Number(price || 0),
+            stock_quantity: Number(stock || 0),
+            image_url: product.image_url
+          })
+        });
+
+        await loadAll();
+      } catch (error) {
+        setStatus(error.message, 'error');
+      }
+    }
+
+    async function deleteProduct(id) {
+      if (!confirm('Delete this product?')) return;
+
+      try {
+        await api(`/admin/products/${id}`, { method: 'DELETE' });
+        await loadAll();
+      } catch (error) {
+        setStatus(error.message, 'error');
+      }
+    }
+
+    async function updateOrderStatus(id, status) {
+      try {
+        await api(`/admin/orders/${id}/status`, {
+          method: 'PATCH',
+          body: JSON.stringify({ status })
+        });
+        await loadAll();
+      } catch (error) {
+        setStatus(error.message, 'error');
+      }
+    }
+
+    document.getElementById('customerForm').addEventListener('submit', addCustomer);
+    document.getElementById('requestForm').addEventListener('submit', addRequest);
+    document.getElementById('productForm').addEventListener('submit', addProduct);
+    document.getElementById('areaForm').addEventListener('submit', addArea);
+    document.getElementById('userForm').addEventListener('submit', addUser);
+    document.getElementById('stockForm').addEventListener('submit', addStockMovement);
+    document.getElementById('route_number').addEventListener('change', applyRouteArea);
+
+    if (requireRole(['manager'])) {
+      loadAll();
+    }
+  </script>
+</body>
+</html>

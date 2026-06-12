@@ -1,0 +1,1276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Almarai Salesman Dashboard</title>
+  <style>
+    :root {
+      --green: #08783a;
+      --green-dark: #075b2c;
+      --blue: #1b638e;
+      --ink: #15212d;
+      --muted: #5d6e7e;
+      --line: #d7e1e8;
+      --paper: #ffffff;
+      --page: #f5f8f2;
+      --soft: #eaf3ee;
+      --cash: #dff2e6;
+      --credit: #e6eef9;
+      --warning: #9a5a00;
+      --danger: #a92736;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--page);
+      color: var(--ink);
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    header {
+      background: var(--green-dark);
+      color: white;
+      padding: 18px 20px;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 24px;
+      letter-spacing: 0;
+    }
+
+    header p {
+      margin: 7px 0 0;
+      color: #dcefe5;
+      font-size: 14px;
+    }
+
+    main {
+      width: min(1280px, calc(100% - 28px));
+      margin: 18px auto 34px;
+    }
+
+    .toolbar,
+    .metric,
+    .panel,
+    .customer-card,
+    .request-card {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    .toolbar {
+      align-items: center;
+      display: flex;
+      gap: 12px;
+      justify-content: space-between;
+      margin-bottom: 14px;
+      padding: 12px;
+      flex-wrap: wrap;
+    }
+
+    .toolbar-left,
+    .actions {
+      align-items: center;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .status {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .status.error {
+      color: var(--danger);
+    }
+
+    input,
+    select,
+    textarea {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      color: var(--ink);
+      font: inherit;
+      min-height: 38px;
+      padding: 8px 10px;
+    }
+
+    input {
+      min-width: 240px;
+    }
+
+    button,
+    .button-link {
+      align-items: center;
+      background: var(--green);
+      border: 0;
+      border-radius: 6px;
+      color: white;
+      cursor: pointer;
+      display: inline-flex;
+      font-size: 14px;
+      font-weight: 700;
+      justify-content: center;
+      min-height: 38px;
+      padding: 9px 12px;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    button.secondary,
+    .button-link.secondary {
+      background: var(--blue);
+    }
+
+    button.light,
+    .button-link.light {
+      background: #eef5ef;
+      color: var(--green-dark);
+      border: 1px solid #cbe2d4;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(150px, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .metric {
+      padding: 13px;
+    }
+
+    .metric span {
+      color: var(--muted);
+      display: block;
+      font-size: 13px;
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 25px;
+      margin-top: 6px;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(330px, 0.8fr);
+      gap: 14px;
+    }
+
+    .panel {
+      overflow: hidden;
+    }
+
+    .panel h2 {
+      border-bottom: 1px solid var(--line);
+      font-size: 18px;
+      margin: 0;
+      padding: 14px;
+    }
+
+    .panel-body {
+      display: grid;
+      gap: 10px;
+      padding: 14px;
+    }
+
+    .customer-card,
+    .request-card {
+      padding: 13px;
+    }
+
+    .card-head {
+      align-items: flex-start;
+      display: flex;
+      gap: 10px;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .card-title {
+      min-width: 0;
+    }
+
+    .card-title strong {
+      display: block;
+      font-size: 16px;
+    }
+
+    .card-title span {
+      color: var(--muted);
+      display: block;
+      font-size: 13px;
+      margin-top: 3px;
+    }
+
+    .pill {
+      border-radius: 999px;
+      color: #164728;
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 5px 8px;
+      white-space: nowrap;
+    }
+
+    .pill.cash {
+      background: var(--cash);
+    }
+
+    .pill.credit {
+      background: var(--credit);
+      color: #24486e;
+    }
+
+    .details {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.45;
+      margin-bottom: 10px;
+    }
+
+    .card-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .visited {
+      opacity: 0.6;
+    }
+
+    .visited .customer-card {
+      border-color: #c9d7ce;
+    }
+
+    .request-card select {
+      min-width: 150px;
+    }
+
+    .empty {
+      border: 1px dashed #c8d6df;
+      border-radius: 8px;
+      color: var(--muted);
+      padding: 18px;
+      text-align: center;
+    }
+
+    .warning {
+      color: var(--warning);
+      font-weight: 700;
+    }
+
+    .duty-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .flow-steps {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .flow-step,
+    .nearby-card,
+    .transfer-step,
+    .stock-card {
+      background: #ffffff;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+    }
+
+    .step-number {
+      align-items: center;
+      background: var(--green);
+      border-radius: 999px;
+      color: white;
+      display: inline-flex;
+      font-weight: 700;
+      height: 28px;
+      justify-content: center;
+      margin-bottom: 8px;
+      width: 28px;
+    }
+
+    .nearby-list,
+    .transfer-flow,
+    .stock-grid {
+      display: grid;
+      gap: 8px;
+    }
+
+    .transfer-form {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr 1fr 110px auto;
+      gap: 8px;
+    }
+
+    .nearby-card {
+      align-items: center;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 10px;
+    }
+
+    .avatar {
+      align-items: center;
+      background: #eaf3ee;
+      border-radius: 999px;
+      color: var(--green-dark);
+      display: inline-flex;
+      font-weight: 700;
+      height: 38px;
+      justify-content: center;
+      width: 38px;
+    }
+
+    .map-zone {
+      background:
+        radial-gradient(circle at center, rgba(8, 120, 58, 0.08), rgba(8, 120, 58, 0.02) 58%, transparent 59%),
+        linear-gradient(135deg, #eef7f1, #f9fbff);
+      border: 1px dashed #8fcaa5;
+      border-radius: 12px;
+      min-height: 260px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .map-zone::before,
+    .map-zone::after {
+      background: rgba(27, 99, 142, 0.13);
+      content: "";
+      height: 2px;
+      left: -20%;
+      position: absolute;
+      top: 48%;
+      transform: rotate(-18deg);
+      width: 140%;
+    }
+
+    .map-zone::after {
+      top: 62%;
+      transform: rotate(24deg);
+    }
+
+    .map-pin {
+      background: white;
+      border: 2px solid var(--green);
+      border-radius: 12px;
+      box-shadow: 0 10px 20px rgba(0, 65, 31, 0.14);
+      padding: 8px;
+      position: absolute;
+      min-width: 116px;
+      z-index: 1;
+    }
+
+    .map-pin.you {
+      background: #0b4bd1;
+      border-color: #0b4bd1;
+      color: white;
+      left: 48%;
+      top: 45%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+    }
+
+    .pin-a { left: 18%; top: 22%; }
+    .pin-b { right: 12%; top: 28%; }
+    .pin-c { left: 26%; bottom: 18%; border-color: #e27600; }
+
+    .support-actions {
+      display: grid;
+      gap: 10px;
+    }
+
+    .support-actions button {
+      min-height: 48px;
+    }
+
+    .support-actions button.offer {
+      background: linear-gradient(135deg, #42a51c, #178c31);
+    }
+
+    .transfer-flow {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+
+    .transfer-step strong,
+    .flow-step strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .stock-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .stock-card strong {
+      display: block;
+      font-size: 18px;
+      margin-bottom: 6px;
+    }
+
+    .positive {
+      color: #08783a;
+      font-weight: 700;
+    }
+
+    .negative {
+      color: #c72626;
+      font-weight: 700;
+    }
+
+    @media (max-width: 880px) {
+      .summary,
+      .layout,
+      .duty-grid,
+      .flow-steps,
+      .transfer-flow,
+      .stock-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .transfer-form {
+        grid-template-columns: 1fr;
+      }
+
+      input,
+      select {
+        min-width: 0;
+        width: 100%;
+      }
+
+      .toolbar-left,
+      .actions,
+      .card-actions {
+        align-items: stretch;
+        width: 100%;
+      }
+
+      button,
+      .button-link {
+        flex: 1;
+      }
+    }
+  </style>
+  <style>
+    body {
+      background: radial-gradient(circle at top left, rgba(15, 128, 62, 0.16), transparent 330px), #edf4ef;
+    }
+
+    header {
+      background: linear-gradient(135deg, #056b32, #069548);
+      border-radius: 0 0 22px 22px;
+      box-shadow: 0 16px 34px rgba(0, 91, 45, 0.24);
+      margin: 0 auto;
+      max-width: 720px;
+      text-align: center;
+    }
+
+    main {
+      max-width: 720px;
+    }
+
+    .toolbar,
+    .metric,
+    .panel,
+    .customer-card,
+    .request-card {
+      border-color: #dbe8dd;
+      box-shadow: 0 10px 24px rgba(0, 81, 43, 0.09);
+    }
+
+    .summary {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .metric {
+      text-align: center;
+    }
+
+    .metric strong {
+      color: #08783a;
+      font-size: 27px;
+    }
+
+    .metric:nth-child(2) strong {
+      color: #0748bb;
+    }
+
+    .metric:nth-child(4) strong {
+      color: #d94b00;
+    }
+
+    .layout {
+      grid-template-columns: 1fr;
+    }
+
+    .customer-card {
+      background: linear-gradient(90deg, #f4fff6, #ffffff);
+    }
+
+    button,
+    .button-link {
+      background: linear-gradient(135deg, #08783a, #05a653);
+      box-shadow: 0 8px 18px rgba(0, 124, 61, 0.18);
+    }
+
+    button.secondary,
+    .button-link.secondary {
+      background: linear-gradient(135deg, #08783a, #04723a);
+    }
+
+    button.light,
+    .button-link.light {
+      background: #f4fbf6;
+      box-shadow: none;
+    }
+
+    @media (max-width: 620px) {
+      main {
+        width: min(100% - 18px, 720px);
+      }
+
+      .summary {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Almarai Salesman Dashboard</h1>
+    <p>Route 950 customer visits, map links, customer types, and follow-up requests.</p>
+  </header>
+
+  <main>
+    <section class="toolbar">
+      <div class="toolbar-left">
+        <strong>Backend:</strong>
+        <span id="apiStatus" class="status">Checking...</span>
+        <input id="search" placeholder="Search customer, ID, area, notes..." oninput="renderAll()">
+        <select id="typeFilter" onchange="renderAll()">
+          <option value="All">All Types</option>
+          <option value="C">C - Cash</option>
+          <option value="CD">CD - Credit</option>
+        </select>
+      </div>
+      <div class="actions">
+        <a class="button-link light" href="#" onclick="openCompanyQr(); return false;">Company QR</a>
+        <button type="button" onclick="loadAll()">Refresh</button>
+      </div>
+    </section>
+
+    <section class="summary">
+      <div class="metric">
+        <span>Route Customers</span>
+        <strong id="customerCount">0</strong>
+      </div>
+      <div class="metric">
+        <span>Visited Today</span>
+        <strong id="visitedCount">0</strong>
+      </div>
+      <div class="metric">
+        <span>Pending Visits</span>
+        <strong id="pendingVisitCount">0</strong>
+      </div>
+      <div class="metric">
+        <span>Open Requests</span>
+        <strong id="openRequestCount">0</strong>
+      </div>
+      <div class="metric">
+        <span>Closing Stock Lines</span>
+        <strong id="stockLineCount">0</strong>
+      </div>
+    </section>
+
+    <section class="duty-grid">
+      <article class="panel">
+        <h2>Getting There - How To Access</h2>
+        <div class="panel-body">
+          <div class="flow-steps">
+            <div class="flow-step">
+              <span class="step-number">1</span>
+              <strong>Scan Depot QR</strong>
+              <div class="details">At start of duty, scan the company QR from the depot.</div>
+            </div>
+            <div class="flow-step">
+              <span class="step-number">2</span>
+              <strong>Login</strong>
+              <div class="details">Enter phone and PIN/password assigned by manager.</div>
+            </div>
+            <div class="flow-step">
+              <span class="step-number">3</span>
+              <strong>Dashboard</strong>
+              <div class="details">Open route 950 home screen, customers, stock, and requests.</div>
+            </div>
+            <div class="flow-step">
+              <span class="step-number">4</span>
+              <strong>Nearby Salesmen</strong>
+              <div class="details">See support options within the 600m working radius.</div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="panel">
+        <h2>Nearby Salesmen - 600m Radius</h2>
+        <div class="panel-body">
+          <div class="nearby-list" id="nearbySalesmen"></div>
+        </div>
+      </article>
+    </section>
+
+    <section class="duty-grid">
+      <article class="panel">
+        <h2>While On Duty - Support Map</h2>
+        <div class="panel-body">
+          <div class="map-zone">
+            <div class="map-pin you"><strong>You</strong><br>Route 950</div>
+            <div class="map-pin pin-a"><strong>Ahmed</strong><br>Route 950<br>180m</div>
+            <div class="map-pin pin-b"><strong>Khalid</strong><br>Route 952<br>420m</div>
+            <div class="map-pin pin-c"><strong>Yusuf</strong><br>Route 955<br>580m</div>
+          </div>
+        </div>
+      </article>
+
+      <article class="panel">
+        <h2>Request Or Offer Support</h2>
+        <div class="panel-body">
+          <div class="support-actions">
+            <button type="button" onclick="createStockRequest('Request Help')">Request Help - I Need Stock</button>
+            <button class="offer" type="button" onclick="createStockRequest('Offer Help')">Offer Help - I Have Stock</button>
+            <button type="button" onclick="createDepotSupport()">Request Depot Support</button>
+          </div>
+          <div class="details">Use depot support when stock is not available nearby. Use nearby salesman support when another route can help quickly.</div>
+        </div>
+      </article>
+    </section>
+
+    <section class="panel">
+      <h2>Product Transfer Between Two Salesmen</h2>
+      <div class="panel-body">
+        <div class="transfer-flow">
+          <div class="transfer-step">
+            <span class="step-number">1</span>
+            <strong>Request Stock</strong>
+            <div class="details">I need stock</div>
+          </div>
+          <div class="transfer-step">
+            <span class="step-number">2</span>
+            <strong>Salesman Accepts</strong>
+            <div class="details">Available salesman accepts or rejects.</div>
+          </div>
+          <div class="transfer-step">
+            <span class="step-number">3</span>
+            <strong>Confirm Send</strong>
+            <div class="details">Sender confirms product and quantity.</div>
+          </div>
+          <div class="transfer-step">
+            <span class="step-number">4</span>
+            <strong>Confirm Receive</strong>
+            <div class="details">Receiver confirms stock received.</div>
+          </div>
+          <div class="transfer-step">
+            <span class="step-number">5</span>
+            <strong>Transfer Complete</strong>
+            <div class="details">Stock updates automatically.</div>
+          </div>
+        </div>
+        <form id="transferForm" class="transfer-form">
+          <select id="transferType" name="request_type">
+            <option value="Need Stock">Need Stock</option>
+            <option value="Offer Stock">Offer Stock</option>
+            <option value="Depot Support">Depot Support</option>
+          </select>
+          <select id="transferSource" name="source_type">
+            <option value="nearby_salesman">Nearby Salesman</option>
+            <option value="depot">Depot</option>
+          </select>
+          <select id="transferSalesman" name="salesman"></select>
+          <select id="transferProduct" name="product">
+            <option>Milk</option>
+            <option>Juice</option>
+            <option>Yoghurt</option>
+            <option>Cheese</option>
+          </select>
+          <input id="transferQuantity" name="quantity" type="number" min="1" value="20">
+          <button type="submit">Send Transfer Request</button>
+        </form>
+        <div id="activeTransfers" class="nearby-list"></div>
+      </div>
+    </section>
+
+    <section class="duty-grid">
+      <article class="panel">
+        <h2>Breakdown / Emergency Assistance</h2>
+        <div class="panel-body">
+          <div class="details">If the truck breaks down, share your location and request the nearest salesman to respond.</div>
+          <button type="button" onclick="createBreakdownRequest()">Request Breakdown Help</button>
+          <div id="breakdownStatus" class="details"></div>
+        </div>
+      </article>
+
+      <article class="panel">
+        <h2>Stock Updated Automatically</h2>
+        <div class="panel-body">
+          <div class="stock-grid">
+            <div class="stock-card">
+              <strong>Route 952</strong>
+              Before: 35 cartons<br>
+              Transferred: <span class="negative">-20</span><br>
+              After: 15 cartons
+            </div>
+            <div class="stock-card">
+              <strong>Route 950</strong>
+              Before: 5 cartons<br>
+              Received: <span class="positive">+20</span><br>
+              After: 25 cartons
+            </div>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="panel">
+      <h2>After Duty - End Of Day Summary</h2>
+      <div class="panel-body">
+        <div class="stock-grid">
+          <div class="stock-card">
+            <strong>Route Summary</strong>
+            Transfers Received: <span id="summaryReceived">0</span><br>
+            Transfers Sent: <span id="summarySent">0</span><br>
+            Customers Visited: <span id="summaryVisited">0</span>
+          </div>
+          <div class="stock-card">
+            <strong>Route Stock Today</strong>
+            <div id="routeStockSummary" class="details">No stock recorded yet.</div>
+          </div>
+          <div class="stock-card">
+            <strong>Transfers History</strong>
+            <div id="transferHistory" class="details">No transfers yet.</div>
+          </div>
+          <div class="stock-card">
+            <strong>Admin Daily Review</strong>
+            Route 950 received stock, sent stock, deliveries, returns, and closing stock.
+          </div>
+          <div class="stock-card">
+            <strong>Reconciliation Impact</strong>
+            Opening load + received transfers - sent transfers - deliveries + returns = expected closing stock.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="layout">
+      <article class="panel">
+        <h2>Route Customers</h2>
+        <div id="customersList" class="panel-body"></div>
+      </article>
+
+      <article class="panel">
+        <h2>Follow-Up Requests</h2>
+        <div id="requestsList" class="panel-body"></div>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    const API = window.location.protocol === 'file:' ? 'http://localhost:5000' : window.location.origin;
+    const pages = {
+      admin: { file: 'admin.html', route: '/admin-dashboard' },
+      customer: { file: 'customer.html', route: '/customer-page' },
+      salesman: { file: 'salesman.html', route: '/salesman-dashboard' }
+    };
+    const todayKey = new Date().toISOString().slice(0, 10);
+    const visitStorageKey = `almarai-salesman-visits-${todayKey}`;
+    const nearbySalesmen = [
+      { name: 'Ahmed', route: '950', distance: 180, status: 'Available' },
+      { name: 'Khalid', route: '952', distance: 420, status: 'Available' },
+      { name: 'Yusuf', route: '955', distance: 580, status: 'Busy' }
+    ];
+    let customers = [];
+    let requests = [];
+    let visits = [];
+    let visited = JSON.parse(localStorage.getItem(visitStorageKey) || '{}');
+    let transfers = [];
+    let routeStock = [];
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function openPage(page) {
+      window.location.href = window.location.protocol === 'file:' ? pages[page].file : pages[page].route;
+    }
+
+    function requireRole(allowedRoles) {
+      const role = localStorage.getItem('almaraiRole');
+      const token = localStorage.getItem('almaraiToken');
+
+      if (!token || !allowedRoles.includes(role)) {
+        window.location.href = window.location.protocol === 'file:' ? 'http://localhost:5000/portal-login' : '/portal-login';
+        return false;
+      }
+
+      return true;
+    }
+
+    function portalBase() {
+      return window.location.protocol === 'file:' ? 'http://localhost:5000' : window.location.origin;
+    }
+
+    function openQr(data, title) {
+      window.open(`${portalBase()}/qr?data=${encodeURIComponent(data)}&title=${encodeURIComponent(title)}`, '_blank');
+    }
+
+    function openCompanyQr() {
+      openQr(`${portalBase()}/portal-login`, 'Almarai Company Portal');
+    }
+
+    function openCustomerQr(customerCode, customerName) {
+      openQr(`${portalBase()}/portal-login?customer=${encodeURIComponent(customerCode)}`, `${customerCode} ${customerName}`);
+    }
+
+    async function api(path, options = {}) {
+      const token = localStorage.getItem('almaraiToken');
+      const response = await fetch(`${API}${path}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        ...options
+      });
+
+      const text = await response.text();
+      const data = text ? JSON.parse(text) : null;
+
+      if (!response.ok) {
+        throw new Error(data?.message || 'Request failed');
+      }
+
+      return data;
+    }
+
+    function cleanPhone(phone) {
+      return String(phone || '').replace(/[^\d]/g, '');
+    }
+
+    function customerMatches(customer) {
+      const query = document.getElementById('search').value.trim().toLowerCase();
+      const typeFilter = document.getElementById('typeFilter').value;
+      const text = [
+        customer.customer_code,
+        customer.name,
+        customer.area,
+        customer.contact_phone,
+        customer.notes
+      ].join(' ').toLowerCase();
+
+      return (!query || text.includes(query))
+        && (typeFilter === 'All' || customer.customer_type === typeFilter);
+    }
+
+    function saveVisits() {
+      localStorage.setItem(visitStorageKey, JSON.stringify(visited));
+    }
+
+    async function toggleVisited(customerId) {
+      const customer = customers.find((item) => item.id === customerId);
+      if (!customer) return;
+
+      if (visited[customerId]) {
+        visited[customerId] = false;
+        saveVisits();
+        renderAll();
+        return;
+      }
+
+      try {
+        await api('/customer-visits', {
+          method: 'POST',
+          body: JSON.stringify({
+            customer_id: customerId,
+            route_number: customer.route_number || '950',
+            visit_status: 'Visited',
+            notes: 'Marked visited from salesman portal'
+          })
+        });
+
+        visited[customerId] = true;
+        saveVisits();
+        await loadAll();
+      } catch (error) {
+        alert(`Could not record visit: ${error.message}`);
+      }
+    }
+
+    function renderSummary() {
+      const openRequests = requests.filter((request) => !['Handled', 'Cancelled'].includes(request.status));
+      const visitedCount = customers.filter((customer) => visited[customer.id]).length;
+      const sentCount = transfers.filter((transfer) => transfer.request_type !== 'Breakdown').length;
+      const receivedCount = transfers.filter((transfer) => transfer.status === 'Received' || transfer.status === 'Transfer Complete').length;
+
+      document.getElementById('customerCount').textContent = customers.length;
+      document.getElementById('visitedCount').textContent = visitedCount;
+      document.getElementById('pendingVisitCount').textContent = Math.max(customers.length - visitedCount, 0);
+      document.getElementById('openRequestCount').textContent = openRequests.length;
+      document.getElementById('stockLineCount').textContent = routeStock.length;
+      document.getElementById('summaryReceived').textContent = receivedCount;
+      document.getElementById('summarySent').textContent = sentCount;
+      document.getElementById('summaryVisited').textContent = visitedCount;
+    }
+
+    function renderNearbySalesmen() {
+      const target = document.getElementById('nearbySalesmen');
+      const transferSalesman = document.getElementById('transferSalesman');
+
+      target.innerHTML = nearbySalesmen.map((salesman) => {
+        const statusClass = salesman.status === 'Available' ? 'positive' : 'warning';
+
+        return `
+          <div class="nearby-card">
+            <span class="avatar">${escapeHtml(salesman.name.charAt(0))}</span>
+            <div>
+              <strong>${escapeHtml(salesman.name)}</strong><br>
+              <span class="details">Route ${escapeHtml(salesman.route)} | ${salesman.distance}m</span>
+            </div>
+            <span class="${statusClass}">${escapeHtml(salesman.status)}</span>
+          </div>
+        `;
+      }).join('');
+
+      transferSalesman.innerHTML = nearbySalesmen.map((salesman) => `
+        <option value="${escapeHtml(salesman.name)}">${escapeHtml(salesman.name)} - Route ${escapeHtml(salesman.route)} - ${salesman.distance}m</option>
+      `).join('');
+    }
+
+    function renderTransferHistory() {
+      const target = document.getElementById('transferHistory');
+      const active = document.getElementById('activeTransfers');
+
+      if (transfers.length === 0) {
+        target.textContent = 'No transfers yet.';
+        active.innerHTML = '<div class="empty">No active stock/support requests.</div>';
+        return;
+      }
+
+      target.innerHTML = transfers.slice(-5).reverse().map((transfer) => `
+        #${transfer.id} - ${escapeHtml(transfer.request_type)}:
+        ${escapeHtml(transfer.quantity || '')} ${escapeHtml(transfer.unit || '')} ${escapeHtml(transfer.product || '')}
+        ${transfer.from_salesman ? `from ${escapeHtml(transfer.from_salesman)}` : ''}
+        ${transfer.source_type === 'depot' ? 'from Depot' : ''}
+        (${escapeHtml(transfer.status)})
+      `).join('<br>');
+
+      const openTransfers = transfers.filter((transfer) => !['Received', 'Cancelled', 'Transfer Complete'].includes(transfer.status));
+
+      if (openTransfers.length === 0) {
+        active.innerHTML = '<div class="empty">No active stock/support requests.</div>';
+        return;
+      }
+
+      active.innerHTML = openTransfers.map((transfer) => `
+        <div class="nearby-card">
+          <span class="avatar">${transfer.source_type === 'depot' ? 'D' : 'S'}</span>
+          <div>
+            <strong>#${transfer.id} ${escapeHtml(transfer.request_type)}</strong><br>
+            <span class="details">
+              ${escapeHtml(transfer.quantity || '')} ${escapeHtml(transfer.unit || '')} ${escapeHtml(transfer.product || '')}<br>
+              From: ${escapeHtml(transfer.source_type === 'depot' ? 'Depot' : transfer.from_salesman || 'Nearby Salesman')}
+              ${transfer.from_route ? `Route ${escapeHtml(transfer.from_route)}` : ''}
+              | To: Route ${escapeHtml(transfer.to_route || '950')}
+            </span>
+          </div>
+          <select onchange="updateTransferStatus(${transfer.id}, this.value)">
+            ${['Requested', 'Accepted', 'Sent', 'Received', 'Cancelled'].map((status) => `
+              <option value="${status}" ${transfer.status === status ? 'selected' : ''}>${status}</option>
+            `).join('')}
+          </select>
+        </div>
+      `).join('');
+    }
+
+    function renderRouteStock() {
+      const target = document.getElementById('routeStockSummary');
+
+      if (routeStock.length === 0) {
+        target.textContent = 'No stock recorded yet.';
+        return;
+      }
+
+      target.innerHTML = routeStock.map((stock) => `
+        ${escapeHtml(stock.product_name)}: opening ${escapeHtml(stock.opening_quantity)}, depot ${escapeHtml(stock.received_quantity)}, in ${escapeHtml(stock.transferred_in_quantity)}, out ${escapeHtml(stock.transferred_out_quantity)}, delivered ${escapeHtml(stock.delivered_quantity)}, returns ${escapeHtml(stock.returned_quantity)}, closing ${escapeHtml(stock.closing_quantity)}
+      `).join('<br>');
+    }
+
+    async function createTransfer(payload) {
+      await api('/salesman/transfers', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+
+      await loadAll();
+    }
+
+    async function createStockRequest(type) {
+      const firstAvailable = nearbySalesmen.find((salesman) => salesman.status === 'Available') || nearbySalesmen[0];
+      await createTransfer({
+        request_type: type === 'Offer Help' ? 'Offer Stock' : 'Need Stock',
+        source_type: 'nearby_salesman',
+        from_route: firstAvailable.route,
+        from_salesman: firstAvailable.name,
+        to_route: '950',
+        to_salesman: 'Route 950 Salesman',
+        product: 'Milk',
+        quantity: 20,
+        unit: 'cartons',
+        notes: type
+      });
+      alert(`${type} sent to ${firstAvailable.name}.`);
+    }
+
+    async function createDepotSupport() {
+      await createTransfer({
+        request_type: 'Depot Support',
+        source_type: 'depot',
+        from_route: 'DEPOT',
+        from_salesman: 'Depot',
+        to_route: '950',
+        to_salesman: 'Route 950 Salesman',
+        product: 'Mixed Stock',
+        quantity: 0,
+        unit: 'support',
+        notes: 'Salesman requested depot help/support.'
+      });
+      alert('Depot support request sent.');
+    }
+
+    async function createBreakdownRequest() {
+      const nearest = nearbySalesmen
+        .slice()
+        .sort((left, right) => left.distance - right.distance)[0];
+
+      await createTransfer({
+        request_type: 'Breakdown',
+        source_type: 'nearby_salesman',
+        from_route: nearest.route,
+        from_salesman: nearest.name,
+        to_route: '950',
+        to_salesman: 'Route 950 Salesman',
+        product: '',
+        quantity: 0,
+        unit: 'assistance',
+        notes: 'Breakdown assistance requested. Location shared by salesman.'
+      });
+      document.getElementById('breakdownStatus').textContent =
+        `${nearest.name} is nearest at ${nearest.distance}m and can respond.`;
+    }
+
+    function renderCustomers() {
+      const target = document.getElementById('customersList');
+      const filtered = customers.filter(customerMatches);
+
+      if (filtered.length === 0) {
+        target.innerHTML = '<div class="empty">No customers match this view.</div>';
+        return;
+      }
+
+      target.innerHTML = filtered.map((customer) => {
+        const typeClass = customer.customer_type === 'CD' ? 'credit' : 'cash';
+        const typeLabel = customer.customer_type === 'CD' ? 'CD - Credit' : 'C - Cash';
+        const phone = cleanPhone(customer.contact_phone);
+        const map = customer.location_link
+          ? `<a class="button-link secondary" href="${escapeHtml(customer.location_link)}" target="_blank">Open Map</a>`
+          : '<span class="warning">No map link</span>';
+        const whatsapp = phone
+          ? `<a class="button-link light" href="https://wa.me/${phone}" target="_blank">WhatsApp</a>`
+          : '';
+        const call = customer.contact_phone
+          ? `<a class="button-link light" href="tel:${escapeHtml(customer.contact_phone)}">Call</a>`
+          : '';
+        const visitedClass = visited[customer.id] ? 'visited' : '';
+        const visitLabel = visited[customer.id] ? 'Visited' : 'Mark Visited';
+
+        return `
+          <div class="${visitedClass}">
+            <article class="customer-card">
+              <div class="card-head">
+                <div class="card-title">
+                  <strong>${escapeHtml(customer.customer_code)} - ${escapeHtml(customer.name)}</strong>
+                  <span>${escapeHtml(customer.area)} | Route ${escapeHtml(customer.route_number)}</span>
+                </div>
+                <span class="pill ${typeClass}">${typeLabel}</span>
+              </div>
+              <div class="details">
+                Phone: ${escapeHtml(customer.contact_phone || 'Not saved')}<br>
+                Notes: ${escapeHtml(customer.notes || 'No notes yet')}
+              </div>
+              <div class="card-actions">
+                ${map}
+                ${whatsapp}
+                ${call}
+                <button type="button" onclick="openCustomerQr('${escapeHtml(customer.customer_code)}', '${escapeHtml(customer.name)}')">QR</button>
+                <button type="button" onclick="toggleVisited(${customer.id})">${visitLabel}</button>
+              </div>
+            </article>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderRequests() {
+      const target = document.getElementById('requestsList');
+      const openRequests = requests.filter((request) => !['Handled', 'Cancelled'].includes(request.status));
+
+      if (openRequests.length === 0) {
+        target.innerHTML = '<div class="empty">No open customer requests.</div>';
+        return;
+      }
+
+      target.innerHTML = openRequests.map((request) => {
+        const phone = cleanPhone(request.phone);
+        const map = request.location_link
+          ? `<a class="button-link secondary" href="${escapeHtml(request.location_link)}" target="_blank">Open Map</a>`
+          : '';
+        const whatsapp = phone
+          ? `<a class="button-link light" href="https://wa.me/${phone}" target="_blank">WhatsApp</a>`
+          : '';
+        const call = request.phone
+          ? `<a class="button-link light" href="tel:${escapeHtml(request.phone)}">Call</a>`
+          : '';
+
+        return `
+          <article class="request-card">
+            <div class="card-head">
+              <div class="card-title">
+                <strong>${escapeHtml(request.customer_name)}</strong>
+                <span>${escapeHtml(request.category)} | Route ${escapeHtml(request.route_number || '')}</span>
+              </div>
+              <span class="pill cash">${escapeHtml(request.status)}</span>
+            </div>
+            <div class="details">
+              ${escapeHtml(request.message)}<br>
+              Contact: ${escapeHtml(request.preferred_contact)} ${escapeHtml(request.phone || '')}
+            </div>
+            <div class="card-actions">
+              ${map}
+              ${whatsapp}
+              ${call}
+              <select onchange="updateRequestStatus(${request.id}, this.value)">
+                ${['Pending', 'Contacted', 'Handled', 'Cancelled'].map((status) => `
+                  <option value="${status}" ${request.status === status ? 'selected' : ''}>${status}</option>
+                `).join('')}
+              </select>
+            </div>
+          </article>
+        `;
+      }).join('');
+    }
+
+    function renderAll() {
+      renderSummary();
+      renderNearbySalesmen();
+      renderTransferHistory();
+      renderRouteStock();
+      renderCustomers();
+      renderRequests();
+    }
+
+    async function loadAll() {
+      const status = document.getElementById('apiStatus');
+      status.className = 'status';
+      status.textContent = 'Loading...';
+
+      try {
+        [customers, requests, transfers, routeStock, visits] = await Promise.all([
+          api('/admin/customers'),
+          api('/admin/custom-requests'),
+          api('/salesman/transfers'),
+          api('/route-stock?route=950'),
+          api('/customer-visits?route=950')
+        ]);
+
+        visits.forEach((visit) => {
+          visited[visit.customer_id] = true;
+        });
+        saveVisits();
+
+        status.textContent = 'Connected';
+        renderAll();
+      } catch (error) {
+        status.className = 'status error';
+        status.textContent = error.message;
+      }
+    }
+
+    async function updateRequestStatus(id, status) {
+      try {
+        await api(`/admin/custom-requests/${id}/status`, {
+          method: 'PATCH',
+          body: JSON.stringify({ status })
+        });
+        await loadAll();
+      } catch (error) {
+        alert(`Could not update request: ${error.message}`);
+      }
+    }
+
+    async function updateTransferStatus(id, status) {
+      try {
+        await api(`/salesman/transfers/${id}/status`, {
+          method: 'PATCH',
+          body: JSON.stringify({ status })
+        });
+        await loadAll();
+      } catch (error) {
+        alert(`Could not update transfer: ${error.message}`);
+      }
+    }
+
+    async function submitTransfer(event) {
+      event.preventDefault();
+      const salesmanText = document.getElementById('transferSalesman').value;
+      const salesman = nearbySalesmen.find((item) => salesmanText.includes(item.name)) || nearbySalesmen[0];
+      const sourceType = document.getElementById('transferSource').value;
+
+      await createTransfer({
+        request_type: document.getElementById('transferType').value,
+        source_type: sourceType,
+        from_route: sourceType === 'depot' ? 'DEPOT' : salesman.route,
+        from_salesman: sourceType === 'depot' ? 'Depot' : salesman.name,
+        to_route: '950',
+        to_salesman: 'Route 950 Salesman',
+        product: document.getElementById('transferProduct').value,
+        quantity: document.getElementById('transferQuantity').value,
+        unit: 'cartons',
+        notes: 'Created from salesman portal.'
+      });
+      alert('Transfer request created.');
+    }
+
+    document.getElementById('transferForm').addEventListener('submit', submitTransfer);
+    if (requireRole(['salesman'])) {
+      loadAll();
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Almarai Portal Login</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #063bb8, #08783a);
+      color: #15212d;
+      display: grid;
+      font-family: Arial, Helvetica, sans-serif;
+      padding: 18px;
+      place-items: center;
+    }
+    main {
+      background: white;
+      border-radius: 18px;
+      box-shadow: 0 24px 55px rgba(0, 0, 0, 0.24);
+      overflow: hidden;
+      width: min(430px, 100%);
+    }
+    header {
+      background: linear-gradient(135deg, #063bb8, #08783a);
+      color: white;
+      padding: 22px;
+    }
+    h1 { margin: 0; font-size: 25px; letter-spacing: 0; }
+    p { margin: 8px 0 0; color: #dcefe5; font-size: 14px; line-height: 1.4; }
+    form { padding: 20px; }
+    label {
+      color: #435367;
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    input {
+      border: 1px solid #d7e1e8;
+      border-radius: 8px;
+      font: inherit;
+      min-height: 42px;
+      padding: 9px 11px;
+      width: 100%;
+    }
+    .field { margin-bottom: 13px; }
+    button {
+      background: linear-gradient(135deg, #08783a, #05a653);
+      border: 0;
+      border-radius: 8px;
+      color: white;
+      cursor: pointer;
+      font: inherit;
+      font-weight: 700;
+      margin-top: 4px;
+      min-height: 44px;
+      width: 100%;
+    }
+    .status { color: #5d6e7e; font-size: 14px; line-height: 1.4; margin-top: 12px; min-height: 20px; }
+    .status.error { color: #a92736; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Almarai Portal</h1>
+      <p>Scan one company QR, login, and open the right dashboard for your role.</p>
+    </header>
+    <form id="loginForm">
+      <div class="field">
+        <label for="phone">Phone</label>
+        <input id="phone" name="phone" placeholder="0541234596" inputmode="tel" required>
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" required>
+      </div>
+      <button type="submit">Login</button>
+      <div id="status" class="status"></div>
+    </form>
+  </main>
+
+  <script>
+    const API = window.location.origin;
+    const params = new URLSearchParams(window.location.search);
+
+    async function login(event) {
+      event.preventDefault();
+      const status = document.getElementById('status');
+      const body = Object.fromEntries(new FormData(event.target).entries());
+      status.className = 'status';
+      status.textContent = 'Checking login...';
+
+      try {
+        const response = await fetch(`${API}/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || 'Login failed');
+
+        localStorage.setItem('almaraiToken', data.token);
+        localStorage.setItem('almaraiRole', data.role);
+
+        const customerCode = params.get('customer');
+        const target = data.redirectUrl === '/customer-page' && customerCode
+          ? `${data.redirectUrl}?customer=${encodeURIComponent(customerCode)}`
+          : data.redirectUrl;
+        window.location.href = target;
+      } catch (error) {
+        status.className = 'status error';
+        status.textContent = error.message;
+      }
+    }
+
+    document.getElementById('loginForm').addEventListener('submit', login);
+  </script>
+</body>
+</html>
