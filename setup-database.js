@@ -59,6 +59,8 @@ async function setupDatabase() {
         credit_limit NUMERIC(10, 2) DEFAULT 0,
         contact_phone VARCHAR(30) DEFAULT '',
         location_link TEXT DEFAULT '',
+        latitude NUMERIC(10, 7),
+        longitude NUMERIC(10, 7),
         notes TEXT DEFAULT '',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -132,11 +134,43 @@ async function setupDatabase() {
         visited_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
+      CREATE TABLE IF NOT EXISTS salesman_locations (
+        id SERIAL PRIMARY KEY,
+        salesman_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        salesman_name VARCHAR(100) DEFAULT '',
+        route_number VARCHAR(30) DEFAULT '950',
+        latitude NUMERIC(10, 7) NOT NULL,
+        longitude NUMERIC(10, 7) NOT NULL,
+        accuracy NUMERIC(10, 2),
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (salesman_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS delivery_proximity_alerts (
+        id SERIAL PRIMARY KEY,
+        customer_id INTEGER REFERENCES customers(id) ON DELETE CASCADE,
+        salesman_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        route_number VARCHAR(30) DEFAULT '950',
+        alert_type VARCHAR(30) NOT NULL,
+        distance_meters NUMERIC(10, 2),
+        message TEXT NOT NULL,
+        alert_date DATE DEFAULT CURRENT_DATE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        acknowledged_at TIMESTAMP,
+        UNIQUE (customer_id, salesman_id, alert_type, alert_date)
+      );
+
       ALTER TABLE customers
       ADD COLUMN IF NOT EXISTS current_balance NUMERIC(10, 2) DEFAULT 0;
 
       ALTER TABLE customers
       ADD COLUMN IF NOT EXISTS credit_limit NUMERIC(10, 2) DEFAULT 0;
+
+      ALTER TABLE customers
+      ADD COLUMN IF NOT EXISTS latitude NUMERIC(10, 7);
+
+      ALTER TABLE customers
+      ADD COLUMN IF NOT EXISTS longitude NUMERIC(10, 7);
 
       INSERT INTO areas (route_number, area_name, city, notes)
       VALUES ('950', 'Wadi Laban', 'Riyadh', 'Default route area')

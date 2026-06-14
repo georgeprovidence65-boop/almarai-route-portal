@@ -42,6 +42,91 @@ function normalizeCustomerType(type) {
   return customerType === 'CD' ? 'CD' : 'C';
 }
 
+function cleanPhone(value) {
+  return String(value || '').replace(/[^\d]/g, '');
+}
+
+function phonesMatch(left, right) {
+  const a = cleanPhone(left);
+  const b = cleanPhone(right);
+  if (!a || !b) return false;
+  return a === b || (a.length >= 9 && b.length >= 9 && a.slice(-9) === b.slice(-9));
+}
+
+function toCoordinate(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function distanceMeters(fromLat, fromLng, toLat, toLng) {
+  const earthRadius = 6371000;
+  const lat1 = Number(fromLat) * Math.PI / 180;
+  const lat2 = Number(toLat) * Math.PI / 180;
+  const deltaLat = (Number(toLat) - Number(fromLat)) * Math.PI / 180;
+  const deltaLng = (Number(toLng) - Number(fromLng)) * Math.PI / 180;
+  const a = Math.sin(deltaLat / 2) ** 2
+    + Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLng / 2) ** 2;
+  return earthRadius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+async function createProximityAlertsForLocation({ salesmanId, salesmanName, routeNumber, latitude, longitude }) {
+  const customersResult = await pool.query(
+    `SELECT id, customer_code, name, route_number, latitude, longitude
+     FROM customers
+     WHERE route_number = $1
+       AND latitude IS NOT NULL
+       AND longitude IS NOT NULL`,
+    [routeNumber]
+  );
+
+  const alerts = [];
+  for (const customer of customersResult.rows) {
+    const distance = distanceMeters(latitude, longitude, customer.latitude, customer.longitude);
+    const possibleAlerts = [
+      {
+        type: 'nearby_50m',
+        threshold: 50,
+        message: 'Your Almarai delivery salesman is nearby and should arrive shortly.'
+      },
+      {
+        type: 'arrived_100ft',
+        threshold: 30.48,
+        message: 'Your Almarai delivery salesman has arrived nearby. Please be ready to receive your order.'
+      }
+    ];
+
+    for (const alert of possibleAlerts) {
+      if (distance > alert.threshold) continue;
+
+      const result = await pool.query(
+        `INSERT INTO delivery_proximity_alerts
+         (customer_id, salesman_id, route_number, alert_type, distance_meters, message)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (customer_id, salesman_id, alert_type, alert_date) DO NOTHING
+         RETURNING id, alert_type, distance_meters, message, created_at`,
+        [customer.id, salesmanId, routeNumber, alert.type, distance, alert.message]
+      );
+
+      if (result.rows[0]) {
+        alerts.push({
+          ...result.rows[0],
+          customer_code: customer.customer_code,
+          customer_name: customer.name,
+          salesman_name: salesmanName
+        });
+      }
+    }
+  }
+
+  return alerts;
+}
+
+function canAccessCustomerRecord(user, customer) {
+  if (!user || !customer) return false;
+  if (['manager', 'admin'].includes(user.role)) return true;
+  return user.role === 'customer' && phonesMatch(user.phone, customer.contact_phone);
+}
+
 app.get('/', (req, res) => {
   res.send('ALMARAI VERSION 1000');
 });
@@ -409,6 +494,128 @@ app.get('/customers/by-code/:customerCode', async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Error loading customer' });
+  }
+});
+
+app.patch('/customers/by-code/:customerCode/location', authenticateToken, async (req, res) => {
+  try {
+    const { customerCode } = req.params;
+    const latitude = toCoordinate(req.body.latitude);
+    const longitude = toCoordinate(req.body.longitude);
+
+    if (latitude === null || longitude === null) {
+      return res.status(400).json({ message: 'Valid latitude and longitude are required' });
+    }
+
+    const customerResult = await pool.query(
+      `SELECT id, customer_code, contact_phone
+       FROM customers
+       WHERE customer_code = $1`,
+      [customerCode]
+    );
+
+    if (customerResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Customer not found' });
+    }
+
+    if (!canAccessCustomerRecord(req.user, customerResult.rows[0])) {
+      return res.status(403).json({ message: 'You can only save location for your own customer account' });
+    }
+
+    const result = await pool.query(
+      `UPDATE customers
+       SET latitude = $1,
+           longitude = $2
+       WHERE customer_code = $3
+       RETURNING id, customer_code, name, route_number`,
+      [latitude, longitude, customerCode]
+    );
+
+    res.json({
+      message: 'Delivery location saved',
+      customer: result.rows[0]
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Failed to save delivery location' });
+  }
+});
+
+app.get('/customer/proximity-alerts', authenticateToken, async (req, res) => {
+  try {
+    const customerCode = String(req.query.customerCode || '').trim();
+    if (!customerCode) {
+      return res.status(400).json({ message: 'Customer code is required' });
+    }
+
+    const customerResult = await pool.query(
+      `SELECT id, customer_code, contact_phone
+       FROM customers
+       WHERE customer_code = $1`,
+      [customerCode]
+    );
+
+    if (customerResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Customer not found' });
+    }
+
+    if (!canAccessCustomerRecord(req.user, customerResult.rows[0])) {
+      return res.status(403).json({ message: 'You can only view alerts for your own customer account' });
+    }
+
+    const result = await pool.query(
+      `SELECT
+        delivery_proximity_alerts.*,
+        users.full_name AS salesman_name
+       FROM delivery_proximity_alerts
+       LEFT JOIN users ON users.id = delivery_proximity_alerts.salesman_id
+       WHERE delivery_proximity_alerts.customer_id = $1
+         AND delivery_proximity_alerts.alert_date = CURRENT_DATE
+         AND delivery_proximity_alerts.acknowledged_at IS NULL
+       ORDER BY delivery_proximity_alerts.created_at DESC`,
+      [customerResult.rows[0].id]
+    );
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Failed to fetch proximity alerts' });
+  }
+});
+
+app.patch('/customer/proximity-alerts/:id/acknowledge', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const alertResult = await pool.query(
+      `SELECT
+        delivery_proximity_alerts.id,
+        customers.contact_phone
+       FROM delivery_proximity_alerts
+       JOIN customers ON customers.id = delivery_proximity_alerts.customer_id
+       WHERE delivery_proximity_alerts.id = $1`,
+      [id]
+    );
+
+    if (alertResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Alert not found' });
+    }
+
+    if (!canAccessCustomerRecord(req.user, alertResult.rows[0])) {
+      return res.status(403).json({ message: 'You can only acknowledge your own alerts' });
+    }
+
+    const result = await pool.query(
+      `UPDATE delivery_proximity_alerts
+       SET acknowledged_at = CURRENT_TIMESTAMP
+       WHERE id = $1
+       RETURNING *`,
+      [id]
+    );
+
+    res.json({ message: 'Alert acknowledged', alert: result.rows[0] });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Failed to acknowledge alert' });
   }
 });
 
@@ -1129,6 +1336,62 @@ app.post('/customer-visits', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Failed to record visit' });
+  }
+});
+
+app.post('/salesman/location', authenticateToken, async (req, res) => {
+  try {
+    if (!['salesman', 'manager', 'admin'].includes(req.user.role)) {
+      return res.status(403).json({ message: 'Salesman location access required' });
+    }
+
+    const latitude = toCoordinate(req.body.latitude);
+    const longitude = toCoordinate(req.body.longitude);
+    const accuracy = toCoordinate(req.body.accuracy);
+    const routeNumber = String(req.body.route_number || '950').trim() || '950';
+
+    if (latitude === null || longitude === null) {
+      return res.status(400).json({ message: 'Valid latitude and longitude are required' });
+    }
+
+    const userResult = await pool.query(
+      'SELECT full_name FROM users WHERE id = $1',
+      [req.user.id]
+    );
+    const salesmanName = userResult.rows[0]?.full_name || req.user.phone || 'Salesman';
+
+    const locationResult = await pool.query(
+      `INSERT INTO salesman_locations
+       (salesman_id, salesman_name, route_number, latitude, longitude, accuracy)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (salesman_id)
+       DO UPDATE SET
+         salesman_name = EXCLUDED.salesman_name,
+         route_number = EXCLUDED.route_number,
+         latitude = EXCLUDED.latitude,
+         longitude = EXCLUDED.longitude,
+         accuracy = EXCLUDED.accuracy,
+         updated_at = CURRENT_TIMESTAMP
+       RETURNING *`,
+      [req.user.id, salesmanName, routeNumber, latitude, longitude, accuracy]
+    );
+
+    const alerts = await createProximityAlertsForLocation({
+      salesmanId: req.user.id,
+      salesmanName,
+      routeNumber,
+      latitude,
+      longitude
+    });
+
+    res.json({
+      message: 'Salesman location updated',
+      location: locationResult.rows[0],
+      alertsCreated: alerts
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Failed to update salesman location' });
   }
 });
 

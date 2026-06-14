@@ -570,7 +570,14 @@
       </div>
       <div class="actions">
         <a class="button-link light" href="#" onclick="openCompanyQr(); return false;">Company QR</a>
+        <button type="button" onclick="startLocationSharing()">Start Location Sharing</button>
         <button type="button" onclick="loadAll()">Refresh</button>
+      </div>
+    </section>
+    <section class="toolbar">
+      <div>
+        <strong>Delivery Alerts:</strong>
+        <span id="locationStatus" class="status">Location sharing is off.</span>
       </div>
     </section>
 
@@ -808,6 +815,7 @@
     let visited = JSON.parse(localStorage.getItem(visitStorageKey) || '{}');
     let transfers = [];
     let routeStock = [];
+    let locationWatchId = null;
 
     function escapeHtml(value) {
       return String(value ?? '')
@@ -921,6 +929,59 @@
       } catch (error) {
         alert(`Could not record visit: ${error.message}`);
       }
+    }
+
+    async function sendSalesmanLocation(position) {
+      const status = document.getElementById('locationStatus');
+      try {
+        const result = await api('/salesman/location', {
+          method: 'POST',
+          body: JSON.stringify({
+            route_number: '950',
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy
+          })
+        });
+
+        const alertCount = result.alertsCreated?.length || 0;
+        status.className = 'status success';
+        status.textContent = alertCount
+          ? `Location sent. ${alertCount} customer alert(s) created.`
+          : 'Location sent. No nearby customer alert yet.';
+      } catch (error) {
+        status.className = 'status error';
+        status.textContent = `Location failed: ${error.message}`;
+      }
+    }
+
+    function startLocationSharing() {
+      const status = document.getElementById('locationStatus');
+
+      if (!navigator.geolocation) {
+        status.className = 'status error';
+        status.textContent = 'This phone/browser does not support GPS location.';
+        return;
+      }
+
+      if (locationWatchId !== null) {
+        status.textContent = 'Location sharing is already running.';
+        return;
+      }
+
+      status.className = 'status';
+      status.textContent = 'Requesting location permission...';
+
+      locationWatchId = navigator.geolocation.watchPosition((position) => {
+        sendSalesmanLocation(position);
+      }, (error) => {
+        status.className = 'status error';
+        status.textContent = `Location permission failed: ${error.message}`;
+      }, {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 10000
+      });
     }
 
     function renderSummary() {

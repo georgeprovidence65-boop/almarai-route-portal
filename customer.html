@@ -243,6 +243,39 @@
       color: var(--green-dark);
     }
 
+    .delivery-alert {
+      display: none;
+      background: #fff8df;
+      border: 1px solid #f0cf72;
+      border-radius: 8px;
+      color: #5f4200;
+      font-size: 14px;
+      line-height: 1.45;
+      margin-bottom: 14px;
+      padding: 12px;
+    }
+
+    .delivery-alert.active {
+      display: block;
+    }
+
+    .delivery-alert strong {
+      color: #3d2a00;
+    }
+
+    .location-actions {
+      display: none;
+      margin-bottom: 12px;
+    }
+
+    .location-actions.active {
+      display: block;
+    }
+
+    .location-actions button {
+      width: 100%;
+    }
+
     @media (max-width: 840px) {
       main {
         grid-template-columns: 1fr;
@@ -365,6 +398,11 @@
           </div>
 
           <div id="customerCard" class="customer-card"></div>
+          <div id="deliveryAlert" class="delivery-alert"></div>
+          <div id="locationActions" class="location-actions">
+            <button type="button" onclick="saveDeliveryLocation()">Save My Delivery Location</button>
+            <p class="note">Allow location permission so the app can notify you when the salesman is nearby.</p>
+          </div>
 
           <div class="field">
             <label for="customer_name">Customer Name</label>
@@ -422,6 +460,8 @@
     let products = [];
     let activeCategory = 'All';
     let selectedCustomer = null;
+    let proximityTimer = null;
+    const seenAlerts = new Set(JSON.parse(localStorage.getItem('almaraiSeenDeliveryAlerts') || '[]'));
 
     function escapeHtml(value) {
       return String(value ?? '')
@@ -449,8 +489,12 @@
     }
 
     async function api(path, options = {}) {
+      const token = localStorage.getItem('almaraiToken');
       const response = await fetch(`${API}${path}`, {
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
         ...options
       });
 
@@ -535,9 +579,11 @@
 
     function renderCustomerCard(message = '') {
       const card = document.getElementById('customerCard');
+      const locationActions = document.getElementById('locationActions');
 
       if (!selectedCustomer && !message) {
         card.style.display = 'none';
+        locationActions.classList.remove('active');
         card.innerHTML = '';
         return;
       }
@@ -545,6 +591,7 @@
       card.style.display = 'block';
 
       if (selectedCustomer) {
+        locationActions.classList.add('active');
         const mapLink = selectedCustomer.location_link
           ? `<br><a href="${escapeHtml(selectedCustomer.location_link)}" target="_blank">Open saved map</a>`
           : '';
@@ -555,10 +602,107 @@
           Balance: ${Number(selectedCustomer.current_balance || 0).toFixed(2)} SAR | Credit Limit: ${Number(selectedCustomer.credit_limit || 0).toFixed(2)} SAR<br>
           ${escapeHtml(selectedCustomer.area)}${mapLink}
         `;
+        startProximityPolling();
         return;
       }
 
+      locationActions.classList.remove('active');
       card.innerHTML = escapeHtml(message);
+    }
+
+    function rememberAlert(id) {
+      seenAlerts.add(id);
+      localStorage.setItem('almaraiSeenDeliveryAlerts', JSON.stringify([...seenAlerts].slice(-80)));
+    }
+
+    function showDeliveryAlert(alert) {
+      const target = document.getElementById('deliveryAlert');
+      const distance = Number(alert.distance_meters || 0).toFixed(0);
+      target.className = 'delivery-alert active';
+      target.innerHTML = `
+        <strong>Delivery update</strong><br>
+        ${escapeHtml(alert.message)}<br>
+        Salesman: ${escapeHtml(alert.salesman_name || 'Almarai salesman')} | Distance: ${distance}m
+      `;
+    }
+
+    function notifyCustomer(alert) {
+      showDeliveryAlert(alert);
+
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('Almarai delivery update', { body: alert.message });
+      }
+
+      if (alert.alert_type === 'arrived_100ft' && 'speechSynthesis' in window) {
+        const voice = new SpeechSynthesisUtterance(alert.message);
+        voice.rate = 0.95;
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(voice);
+      }
+    }
+
+    async function requestNotificationPermission() {
+      if ('Notification' in window && Notification.permission === 'default') {
+        await Notification.requestPermission();
+      }
+    }
+
+    async function saveDeliveryLocation() {
+      if (!selectedCustomer) {
+        alert('Find your customer account first.');
+        return;
+      }
+
+      await requestNotificationPermission();
+
+      if (!navigator.geolocation) {
+        alert('This phone/browser does not support GPS location.');
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(async (position) => {
+        try {
+          await api(`/customers/by-code/${encodeURIComponent(selectedCustomer.customer_code)}/location`, {
+            method: 'PATCH',
+            body: JSON.stringify({
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude
+            })
+          });
+          alert('Delivery location saved.');
+          startProximityPolling();
+        } catch (error) {
+          alert(`Could not save delivery location: ${error.message}`);
+        }
+      }, (error) => {
+        alert(`Location permission failed: ${error.message}`);
+      }, {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 30000
+      });
+    }
+
+    async function checkProximityAlerts() {
+      if (!selectedCustomer) return;
+
+      try {
+        const alerts = await api(`/customer/proximity-alerts?customerCode=${encodeURIComponent(selectedCustomer.customer_code)}`);
+        for (const alert of alerts) {
+          if (seenAlerts.has(alert.id)) continue;
+          rememberAlert(alert.id);
+          notifyCustomer(alert);
+          await api(`/customer/proximity-alerts/${alert.id}/acknowledge`, { method: 'PATCH' });
+        }
+      } catch (error) {
+        console.warn('Delivery alert check failed', error);
+      }
+    }
+
+    function startProximityPolling() {
+      if (proximityTimer) clearInterval(proximityTimer);
+      checkProximityAlerts();
+      proximityTimer = setInterval(checkProximityAlerts, 15000);
     }
 
     async function lookupCustomer() {
