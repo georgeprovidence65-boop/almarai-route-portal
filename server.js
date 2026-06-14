@@ -58,6 +58,10 @@ app.get('/portal-login', (req, res) => {
   res.sendFile(`${__dirname}/login.html`);
 });
 
+app.get('/i18n.js', (req, res) => {
+  res.sendFile(`${__dirname}/i18n.js`);
+});
+
 app.get('/customer-page', (req, res) => {
   res.sendFile(`${__dirname}/customer.html`);
 });

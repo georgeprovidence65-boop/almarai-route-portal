@@ -59,30 +59,49 @@
       min-height: 44px;
       width: 100%;
     }
+    .language-switcher {
+      align-items: center;
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      margin-top: 16px;
+    }
+    .language-switcher label {
+      color: #dcefe5;
+      margin: 0;
+    }
+    .language-switcher select {
+      border: 1px solid rgba(255, 255, 255, 0.42);
+      border-radius: 8px;
+      font: inherit;
+      min-height: 34px;
+      padding: 6px 8px;
+    }
     .status { color: #5d6e7e; font-size: 14px; line-height: 1.4; margin-top: 12px; min-height: 20px; }
     .status.error { color: #a92736; font-weight: 700; }
   </style>
 </head>
 <body>
   <main>
-    <header>
-      <h1>Almarai Portal</h1>
-      <p>Scan one company QR, login, and open the right dashboard for your role.</p>
+    <header data-language-target>
+      <h1 data-i18n="portalTitle">Almarai Portal</h1>
+      <p data-i18n="portalIntro">Scan one company QR, login, and open the right dashboard for your role.</p>
     </header>
     <form id="loginForm">
       <div class="field">
-        <label for="phone">Phone</label>
+        <label for="phone" data-i18n="phone">Phone</label>
         <input id="phone" name="phone" placeholder="0541234596" inputmode="tel" required>
       </div>
       <div class="field">
-        <label for="password">Password</label>
+        <label for="password" data-i18n="password">Password</label>
         <input id="password" name="password" type="password" required>
       </div>
-      <button type="submit">Login</button>
+      <button type="submit" data-i18n="login">Login</button>
       <div id="status" class="status"></div>
     </form>
   </main>
 
+  <script src="/i18n.js"></script>
   <script>
     const API = window.location.origin;
     const params = new URLSearchParams(window.location.search);
@@ -92,7 +111,7 @@
       const status = document.getElementById('status');
       const body = Object.fromEntries(new FormData(event.target).entries());
       status.className = 'status';
-      status.textContent = 'Checking login...';
+      status.textContent = window.AlmaraiI18n ? window.AlmaraiI18n.t('checkingLogin') : 'Checking login...';
 
       try {
         const response = await fetch(`${API}/login`, {
@@ -101,7 +120,7 @@
           body: JSON.stringify(body)
         });
         const data = await response.json();
-        if (!response.ok) throw new Error(data.message || 'Login failed');
+        if (!response.ok) throw new Error(data.message || (window.AlmaraiI18n ? window.AlmaraiI18n.t('loginFailed') : 'Login failed'));
 
         localStorage.setItem('almaraiToken', data.token);
         localStorage.setItem('almaraiRole', data.role);
