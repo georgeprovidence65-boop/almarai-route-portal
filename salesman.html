@@ -370,6 +370,7 @@
       border: 2px solid var(--green);
       border-radius: 12px;
       box-shadow: 0 10px 20px rgba(0, 65, 31, 0.14);
+      font-size: 14px;
       padding: 8px;
       position: absolute;
       min-width: 116px;
@@ -389,6 +390,25 @@
     .pin-a { left: 18%; top: 22%; }
     .pin-b { right: 12%; top: 28%; }
     .pin-c { left: 26%; bottom: 18%; border-color: #e27600; }
+
+    .map-pin.approved {
+      border-color: #123fbd;
+    }
+
+    .map-empty {
+      align-items: center;
+      background: rgba(255, 255, 255, 0.82);
+      border: 1px dashed #c8d6df;
+      border-radius: 10px;
+      color: var(--muted);
+      display: flex;
+      inset: 74px 22px 22px;
+      justify-content: center;
+      padding: 16px;
+      position: absolute;
+      text-align: center;
+      z-index: 1;
+    }
 
     .support-actions {
       display: grid;
@@ -645,11 +665,9 @@
       <article class="panel">
         <h2>While On Duty - Support Map</h2>
         <div class="panel-body">
-          <div class="map-zone">
-            <div class="map-pin you"><strong>You</strong><br>Route 950</div>
-            <div class="map-pin pin-a"><strong>Ahmed</strong><br>Route 950<br>180m</div>
-            <div class="map-pin pin-b"><strong>Khalid</strong><br>Route 952<br>420m</div>
-            <div class="map-pin pin-c"><strong>Yusuf</strong><br>Route 955<br>580m</div>
+          <div class="map-zone" id="supportMap">
+            <div class="map-pin you"><strong>You</strong><br><span id="mapCurrentRoute">Route 950</span></div>
+            <div class="map-empty">Start location sharing to show nearby salesmen on this map.</div>
           </div>
         </div>
       </article>
@@ -1005,6 +1023,7 @@
     function renderNearbySalesmen() {
       const target = document.getElementById('nearbySalesmen');
       const transferSalesman = document.getElementById('transferSalesman');
+      renderSupportMap();
 
       if (nearbySalesmen.length === 0) {
         target.innerHTML = '<div class="empty">No nearby or logistics-approved salesman available. Start location sharing or ask logistics to approve a transfer partner.</div>';
@@ -1034,6 +1053,41 @@
       transferSalesman.innerHTML = nearbySalesmen.map((salesman) => `
         <option value="${salesman.id}">${escapeHtml(salesman.full_name)} - Route ${escapeHtml(salesman.route_number || '')}</option>
       `).join('');
+    }
+
+    function renderSupportMap() {
+      const map = document.getElementById('supportMap');
+      const routeLabel = document.getElementById('mapCurrentRoute');
+      if (!map || !routeLabel) return;
+
+      routeLabel.textContent = `Route ${currentRoute || '950'}`;
+      const positions = [
+        { left: '16%', top: '20%' },
+        { left: '58%', top: '26%' },
+        { left: '26%', top: '66%' },
+        { left: '62%', top: '64%' }
+      ];
+
+      const pins = nearbySalesmen.slice(0, 4).map((salesman, index) => {
+        const distance = salesman.distance_meters === null || salesman.distance_meters === undefined
+          ? 'Approved'
+          : `${Math.round(Number(salesman.distance_meters))}m`;
+        const source = salesman.approved_partner ? 'approved' : '';
+        const style = `left:${positions[index].left};top:${positions[index].top};`;
+
+        return `
+          <div class="map-pin ${source}" style="${style}">
+            <strong>${escapeHtml(salesman.full_name)}</strong><br>
+            Route ${escapeHtml(salesman.route_number || '')}<br>
+            ${distance}
+          </div>
+        `;
+      }).join('');
+
+      map.innerHTML = `
+        <div class="map-pin you"><strong>You</strong><br><span id="mapCurrentRoute">Route ${escapeHtml(currentRoute || '950')}</span></div>
+        ${pins || '<div class="map-empty">No nearby or approved salesman currently available.</div>'}
+      `;
     }
 
     function renderTransferHistory() {
