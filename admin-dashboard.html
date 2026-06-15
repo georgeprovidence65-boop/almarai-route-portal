@@ -99,7 +99,7 @@
   </style>
 </head>
 <body>
-  <header>
+  <header data-language-target>
     <h1>Almarai Admin Dashboard</h1>
     <p>Admin review only: customers, orders, requests, and stock support activity.</p>
   </header>
@@ -137,6 +137,7 @@
     </section>
   </main>
 
+  <script src="/i18n.js"></script>
   <script>
     const API = window.location.protocol === 'file:' ? 'http://localhost:5000' : window.location.origin;
     let customers = [];

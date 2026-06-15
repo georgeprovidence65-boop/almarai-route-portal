@@ -368,7 +368,7 @@
   </style>
 </head>
 <body>
-  <header>
+  <header data-language-target>
     <h1>Almarai Customer Help</h1>
     <p>Choose a product area or send a request if you are not sure what to order.</p>
   </header>
@@ -448,6 +448,7 @@
     </section>
   </main>
 
+  <script src="/i18n.js"></script>
   <script>
     const API = window.location.protocol === 'file:' ? 'http://localhost:5000' : window.location.origin;
     const params = new URLSearchParams(window.location.search);

@@ -368,7 +368,7 @@
   </style>
 </head>
 <body>
-  <header>
+  <header data-language-target>
     <h1>Almarai Manager Portal</h1>
     <p>Areas, users, products, pricing, customers, QR codes, orders, and follow-up requests.</p>
   </header>
@@ -859,6 +859,7 @@
     </section>
   </main>
 
+  <script src="/i18n.js"></script>
   <script>
     const API = window.location.protocol === 'file:' ? 'http://localhost:5000' : window.location.origin;
     const pages = {
