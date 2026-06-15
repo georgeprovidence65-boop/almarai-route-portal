@@ -45,6 +45,14 @@ function requireLogistics(req, res, next) {
   next();
 }
 
+function requireTransferApprover(req, res, next) {
+  if (req.user.role !== 'logistics') {
+    return res.status(403).json({ message: 'Only logistics can approve transfer partners' });
+  }
+
+  next();
+}
+
 function normalizeCustomerType(type) {
   const customerType = String(type || '').trim().toUpperCase();
   return customerType === 'CD' ? 'CD' : 'C';
@@ -972,7 +980,7 @@ app.get('/logistics/transfer-partners', authenticateToken, requireLogistics, asy
   }
 });
 
-app.post('/logistics/transfer-partners', authenticateToken, requireLogistics, async (req, res) => {
+app.post('/logistics/transfer-partners', authenticateToken, requireTransferApprover, async (req, res) => {
   try {
     const fromSalesmanId = Number(req.body.from_salesman_id || 0);
     const toSalesmanId = Number(req.body.to_salesman_id || 0);
@@ -1026,7 +1034,7 @@ app.post('/logistics/transfer-partners', authenticateToken, requireLogistics, as
   }
 });
 
-app.delete('/logistics/transfer-partners/:id', authenticateToken, requireLogistics, async (req, res) => {
+app.delete('/logistics/transfer-partners/:id', authenticateToken, requireTransferApprover, async (req, res) => {
   try {
     const { id } = req.params;
     const result = await pool.query(

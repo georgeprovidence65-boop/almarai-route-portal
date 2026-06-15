@@ -995,9 +995,11 @@
 
     function renderTransferPartners() {
       const tbody = document.getElementById('partnersTable');
+      const canApprove = localStorage.getItem('almaraiRole') === 'logistics';
 
       if (transferPartners.length === 0) {
         tbody.innerHTML = '<tr><td colspan="6" class="empty">No approved transfer partners yet.</td></tr>';
+        configureTransferApprovalControls();
         return;
       }
 
@@ -1009,10 +1011,25 @@
           <td>${escapeHtml(partner.from_route || '')} → ${escapeHtml(partner.to_route || '')}</td>
           <td>${partner.is_active ? 'Active' : 'Removed'}</td>
           <td>
-            ${partner.is_active ? `<button class="danger" type="button" onclick="removeTransferPartner(${partner.id})">Remove</button>` : ''}
+            ${canApprove && partner.is_active ? `<button class="danger" type="button" onclick="removeTransferPartner(${partner.id})">Remove</button>` : ''}
           </td>
         </tr>
       `).join('');
+      configureTransferApprovalControls();
+    }
+
+    function configureTransferApprovalControls() {
+      const canApprove = localStorage.getItem('almaraiRole') === 'logistics';
+      const form = document.getElementById('partnerForm');
+      if (!form) return;
+
+      form.querySelectorAll('input, select, button').forEach((control) => {
+        control.disabled = !canApprove;
+      });
+
+      if (!canApprove) {
+        document.getElementById('partner_notes').placeholder = 'Only logistics can approve or remove transfer partners';
+      }
     }
 
     function renderCustomers() {
@@ -1297,6 +1314,11 @@
 
     async function addTransferPartner(event) {
       event.preventDefault();
+      if (localStorage.getItem('almaraiRole') !== 'logistics') {
+        setStatus('Only logistics can approve transfer partners.', 'error');
+        return;
+      }
+
       const form = event.target;
       const data = formData(form);
       data.from_salesman_id = Number(data.from_salesman_id || 0);
@@ -1316,6 +1338,11 @@
     }
 
     async function removeTransferPartner(id) {
+      if (localStorage.getItem('almaraiRole') !== 'logistics') {
+        setStatus('Only logistics can remove transfer partners.', 'error');
+        return;
+      }
+
       if (!confirm('Remove this approved transfer partner?')) return;
 
       try {

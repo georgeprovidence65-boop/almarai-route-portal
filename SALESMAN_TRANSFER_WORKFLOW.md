@@ -33,7 +33,9 @@ Old/stale location should not count as nearby.
 
 ## Logistics Approval Rule
 
-Logistics, manager, or admin can approve transfer partners.
+Only logistics can approve or remove transfer partners.
+
+Route-to-route transfer between salesmen should not require admin approval. Admin can review transfer records, but admin should not approve transfer partners.
 
 The approved partner setup should define:
 
@@ -66,5 +68,4 @@ The app uses browser GPS and the existing free Render/Supabase setup.
 
 Salesmen must click **Start Location Sharing** for nearby detection to work.
 
-If GPS is off or no approved partner exists, the salesman cannot create a route-to-route transfer.
-
+If GPS is off and no logistics-approved partner exists, the salesman cannot create a route-to-route transfer to that salesperson.
