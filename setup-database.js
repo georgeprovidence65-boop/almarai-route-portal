@@ -9,6 +9,10 @@ async function setupDatabase() {
         phone VARCHAR(20) UNIQUE NOT NULL,
         password VARCHAR(255) NOT NULL,
         role VARCHAR(20) DEFAULT 'customer',
+        route_number VARCHAR(30) DEFAULT '',
+        area VARCHAR(150) DEFAULT '',
+        can_receive_transfers BOOLEAN DEFAULT true,
+        is_active BOOLEAN DEFAULT true,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
@@ -84,16 +88,35 @@ async function setupDatabase() {
         source_type VARCHAR(30) DEFAULT 'nearby_salesman',
         from_route VARCHAR(30) DEFAULT '',
         from_salesman VARCHAR(100) DEFAULT '',
+        from_salesman_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
         to_route VARCHAR(30) DEFAULT '950',
         to_salesman VARCHAR(100) DEFAULT '',
+        to_salesman_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
         product VARCHAR(120) DEFAULT '',
         quantity INTEGER DEFAULT 0,
         unit VARCHAR(30) DEFAULT 'cartons',
         status VARCHAR(40) DEFAULT 'Requested',
         notes TEXT DEFAULT '',
+        transfer_channel VARCHAR(40) DEFAULT 'nearby_salesman',
+        logistics_approved BOOLEAN DEFAULT false,
+        requested_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
         created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS transfer_partners (
+        id SERIAL PRIMARY KEY,
+        from_salesman_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        to_salesman_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        from_route VARCHAR(30) DEFAULT '',
+        to_route VARCHAR(30) DEFAULT '',
+        notes TEXT DEFAULT '',
+        is_active BOOLEAN DEFAULT true,
+        created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (from_salesman_id, to_salesman_id)
       );
 
       CREATE TABLE IF NOT EXISTS route_stock (
@@ -171,6 +194,33 @@ async function setupDatabase() {
 
       ALTER TABLE customers
       ADD COLUMN IF NOT EXISTS longitude NUMERIC(10, 7);
+
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS route_number VARCHAR(30) DEFAULT '';
+
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS area VARCHAR(150) DEFAULT '';
+
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS can_receive_transfers BOOLEAN DEFAULT true;
+
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
+
+      ALTER TABLE stock_transfers
+      ADD COLUMN IF NOT EXISTS from_salesman_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+
+      ALTER TABLE stock_transfers
+      ADD COLUMN IF NOT EXISTS to_salesman_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+
+      ALTER TABLE stock_transfers
+      ADD COLUMN IF NOT EXISTS transfer_channel VARCHAR(40) DEFAULT 'nearby_salesman';
+
+      ALTER TABLE stock_transfers
+      ADD COLUMN IF NOT EXISTS logistics_approved BOOLEAN DEFAULT false;
+
+      ALTER TABLE stock_transfers
+      ADD COLUMN IF NOT EXISTS requested_by INTEGER REFERENCES users(id) ON DELETE SET NULL;
 
       INSERT INTO areas (route_number, area_name, city, notes)
       VALUES ('950', 'Wadi Laban', 'Riyadh', 'Default route area')

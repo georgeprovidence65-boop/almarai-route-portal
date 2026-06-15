@@ -468,7 +468,23 @@
                 <option value="salesman">salesman</option>
                 <option value="manager">manager</option>
                 <option value="admin">admin</option>
+                <option value="logistics">logistics</option>
                 <option value="customer">customer</option>
+              </select>
+            </div>
+            <div>
+              <label for="user_route_number">Route</label>
+              <input id="user_route_number" name="route_number" placeholder="950">
+            </div>
+            <div>
+              <label for="user_area">Area</label>
+              <input id="user_area" name="area" placeholder="Wadi Laban">
+            </div>
+            <div>
+              <label for="user_can_receive_transfers">Transfer Support</label>
+              <select id="user_can_receive_transfers" name="can_receive_transfers">
+                <option value="true">Available</option>
+                <option value="false">Not Available</option>
               </select>
             </div>
             <div class="wide">
@@ -484,6 +500,8 @@
                   <th>Name</th>
                   <th>Phone</th>
                   <th>Role</th>
+                  <th>Route</th>
+                  <th>Transfer</th>
                 </tr>
               </thead>
               <tbody id="usersTable"></tbody>
@@ -751,6 +769,45 @@
       </article>
 
       <article class="panel">
+        <h2>Logistics Transfer Control</h2>
+        <div class="panel-body">
+          <form id="partnerForm">
+            <div>
+              <label for="partner_from_salesman_id">From Salesman</label>
+              <select id="partner_from_salesman_id" name="from_salesman_id" required></select>
+            </div>
+            <div>
+              <label for="partner_to_salesman_id">To Salesman</label>
+              <select id="partner_to_salesman_id" name="to_salesman_id" required></select>
+            </div>
+            <div class="wide">
+              <label for="partner_notes">Notes</label>
+              <input id="partner_notes" name="notes" placeholder="Approved route-to-route stock support">
+            </div>
+            <div class="wide">
+              <button type="submit">Approve Transfer Partner</button>
+            </div>
+          </form>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>From</th>
+                  <th>To</th>
+                  <th>Routes</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="partnersTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </article>
+
+      <article class="panel">
         <h2>Salesman Stock Support</h2>
         <div class="panel-body">
           <div class="table-wrap">
@@ -791,6 +848,7 @@
     let users = [];
     let transfers = [];
     let routeStock = [];
+    let transferPartners = [];
 
     function escapeHtml(value) {
       return String(value || '')
@@ -907,7 +965,7 @@
       const tbody = document.getElementById('usersTable');
 
       if (users.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="empty">No users loaded. Login as manager to view users.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="empty">No users loaded. Login as manager to view users.</td></tr>';
         return;
       }
 
@@ -917,6 +975,42 @@
           <td>${escapeHtml(user.full_name)}</td>
           <td>${escapeHtml(user.phone)}</td>
           <td>${escapeHtml(user.role)}</td>
+          <td>${escapeHtml(user.route_number || '')}</td>
+          <td>${user.can_receive_transfers ? 'Available' : 'Off'}</td>
+        </tr>
+      `).join('');
+
+      renderSalesmanPartnerOptions();
+    }
+
+    function renderSalesmanPartnerOptions() {
+      const salesmen = users.filter((user) => user.role === 'salesman' && user.is_active !== false);
+      const options = salesmen.map((user) => `
+        <option value="${user.id}">${escapeHtml(user.full_name)} - Route ${escapeHtml(user.route_number || 'not set')}</option>
+      `).join('');
+
+      document.getElementById('partner_from_salesman_id').innerHTML = options;
+      document.getElementById('partner_to_salesman_id').innerHTML = options;
+    }
+
+    function renderTransferPartners() {
+      const tbody = document.getElementById('partnersTable');
+
+      if (transferPartners.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="empty">No approved transfer partners yet.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = transferPartners.map((partner) => `
+        <tr>
+          <td>${partner.id}</td>
+          <td>${escapeHtml(partner.from_salesman_name || partner.from_salesman_id)}</td>
+          <td>${escapeHtml(partner.to_salesman_name || partner.to_salesman_id)}</td>
+          <td>${escapeHtml(partner.from_route || '')} → ${escapeHtml(partner.to_route || '')}</td>
+          <td>${partner.is_active ? 'Active' : 'Removed'}</td>
+          <td>
+            ${partner.is_active ? `<button class="danger" type="button" onclick="removeTransferPartner(${partner.id})">Remove</button>` : ''}
+          </td>
         </tr>
       `).join('');
     }
@@ -1117,6 +1211,12 @@
         }
 
         try {
+          transferPartners = await api('/logistics/transfer-partners');
+        } catch (error) {
+          transferPartners = [];
+        }
+
+        try {
           routeStock = await api('/route-stock?route=950');
         } catch (error) {
           routeStock = [];
@@ -1130,6 +1230,7 @@
         renderAreas();
         renderUsers();
         renderTransfers();
+        renderTransferPartners();
         updateSummary();
         setStatus('Connected');
       } catch (error) {
@@ -1187,6 +1288,38 @@
         });
 
         form.reset();
+        document.getElementById('user_can_receive_transfers').value = 'true';
+        await loadAll();
+      } catch (error) {
+        setStatus(error.message, 'error');
+      }
+    }
+
+    async function addTransferPartner(event) {
+      event.preventDefault();
+      const form = event.target;
+      const data = formData(form);
+      data.from_salesman_id = Number(data.from_salesman_id || 0);
+      data.to_salesman_id = Number(data.to_salesman_id || 0);
+
+      try {
+        await api('/logistics/transfer-partners', {
+          method: 'POST',
+          body: JSON.stringify(data)
+        });
+
+        form.reset();
+        await loadAll();
+      } catch (error) {
+        setStatus(error.message, 'error');
+      }
+    }
+
+    async function removeTransferPartner(id) {
+      if (!confirm('Remove this approved transfer partner?')) return;
+
+      try {
+        await api(`/logistics/transfer-partners/${id}`, { method: 'DELETE' });
         await loadAll();
       } catch (error) {
         setStatus(error.message, 'error');
@@ -1327,10 +1460,11 @@
     document.getElementById('productForm').addEventListener('submit', addProduct);
     document.getElementById('areaForm').addEventListener('submit', addArea);
     document.getElementById('userForm').addEventListener('submit', addUser);
+    document.getElementById('partnerForm').addEventListener('submit', addTransferPartner);
     document.getElementById('stockForm').addEventListener('submit', addStockMovement);
     document.getElementById('route_number').addEventListener('change', applyRouteArea);
 
-    if (requireRole(['manager'])) {
+    if (requireRole(['manager', 'admin', 'logistics'])) {
       loadAll();
     }
   </script>

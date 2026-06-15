@@ -1,7 +1,7 @@
 const bcrypt = require('bcrypt');
 const pool = require('./database');
 
-const allowedRoles = ['manager', 'admin', 'salesman', 'customer'];
+const allowedRoles = ['manager', 'admin', 'logistics', 'salesman', 'customer'];
 
 async function createUser() {
   const fullName = process.env.USER_FULL_NAME;

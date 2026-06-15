@@ -37,6 +37,14 @@ function requireManager(req, res, next) {
   next();
 }
 
+function requireLogistics(req, res, next) {
+  if (!['manager', 'admin', 'logistics'].includes(req.user.role)) {
+    return res.status(403).json({ message: 'Logistics access required' });
+  }
+
+  next();
+}
+
 function normalizeCustomerType(type) {
   const customerType = String(type || '').trim().toUpperCase();
   return customerType === 'CD' ? 'CD' : 'C';
@@ -67,6 +75,10 @@ function distanceMeters(fromLat, fromLng, toLat, toLng) {
   const a = Math.sin(deltaLat / 2) ** 2
     + Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLng / 2) ** 2;
   return earthRadius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function isFreshLocation(updatedAt) {
+  return updatedAt && (Date.now() - new Date(updatedAt).getTime()) <= 30 * 60 * 1000;
 }
 
 async function createProximityAlertsForLocation({ salesmanId, salesmanName, routeNumber, latitude, longitude }) {
@@ -424,7 +436,8 @@ app.post('/login', async (req, res) => {
       {
         id: user.id,
         phone: user.phone,
-        role: user.role
+        role: user.role,
+        route_number: user.route_number || ''
       },
       JWT_SECRET,
       { expiresIn: '7d' }
@@ -435,9 +448,11 @@ app.post('/login', async (req, res) => {
       ? '/manager-portal'
       : role === 'admin'
         ? '/admin-dashboard'
-        : role === 'salesman'
-          ? '/salesman-dashboard'
-          : '/customer-page';
+        : role === 'logistics'
+          ? '/manager-portal'
+          : role === 'salesman'
+            ? '/salesman-dashboard'
+            : '/customer-page';
 
     res.json({
       message: 'Login successful',
@@ -454,7 +469,7 @@ app.post('/login', async (req, res) => {
 app.get('/profile', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(
-      'SELECT id, full_name, phone, role FROM users WHERE id = $1',
+      'SELECT id, full_name, phone, role, route_number, area, can_receive_transfers, is_active FROM users WHERE id = $1',
       [req.user.id]
     );
 
@@ -841,10 +856,10 @@ app.post('/admin/areas', authenticateToken, requireManager, async (req, res) => 
   }
 });
 
-app.get('/admin/users', authenticateToken, requireManager, async (req, res) => {
+app.get('/admin/users', authenticateToken, requireLogistics, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT id, full_name, phone, role, created_at
+      SELECT id, full_name, phone, role, route_number, area, can_receive_transfers, is_active, created_at
       FROM users
       ORDER BY id DESC
     `);
@@ -858,21 +873,33 @@ app.get('/admin/users', authenticateToken, requireManager, async (req, res) => {
 
 app.post('/admin/users', authenticateToken, requireManager, async (req, res) => {
   try {
-    const { full_name, phone, password, role } = req.body;
+    const {
+      full_name,
+      phone,
+      password,
+      role,
+      route_number,
+      area,
+      can_receive_transfers,
+      is_active
+    } = req.body;
 
     if (!full_name || !phone || !password) {
       return res.status(400).json({ message: 'Name, phone, and password are required' });
     }
 
-    const allowedRoles = ['manager', 'admin', 'salesman', 'customer'];
+    const allowedRoles = ['manager', 'admin', 'logistics', 'salesman', 'customer'];
     const userRole = allowedRoles.includes(role) ? role : 'customer';
     const hashedPassword = await bcrypt.hash(password, 10);
+    const canReceiveTransfers = can_receive_transfers !== false && can_receive_transfers !== 'false';
+    const active = is_active !== false && is_active !== 'false';
 
     const result = await pool.query(
-      `INSERT INTO users (full_name, phone, password, role)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, full_name, phone, role, created_at`,
-      [full_name, phone, hashedPassword, userRole]
+      `INSERT INTO users
+       (full_name, phone, password, role, route_number, area, can_receive_transfers, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id, full_name, phone, role, route_number, area, can_receive_transfers, is_active, created_at`,
+      [full_name, phone, hashedPassword, userRole, route_number || '', area || '', canReceiveTransfers, active]
     );
 
     res.status(201).json({
@@ -882,6 +909,143 @@ app.post('/admin/users', authenticateToken, requireManager, async (req, res) => 
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Failed to create user' });
+  }
+});
+
+app.patch('/admin/users/:id', authenticateToken, requireManager, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      route_number,
+      area,
+      can_receive_transfers,
+      is_active
+    } = req.body;
+
+    const result = await pool.query(
+      `UPDATE users
+       SET route_number = COALESCE($1, route_number),
+           area = COALESCE($2, area),
+           can_receive_transfers = COALESCE($3, can_receive_transfers),
+           is_active = COALESCE($4, is_active)
+       WHERE id = $5
+       RETURNING id, full_name, phone, role, route_number, area, can_receive_transfers, is_active`,
+      [
+        route_number ?? null,
+        area ?? null,
+        can_receive_transfers === undefined ? null : can_receive_transfers === true || can_receive_transfers === 'true',
+        is_active === undefined ? null : is_active === true || is_active === 'true',
+        id
+      ]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.json({ message: 'User updated', user: result.rows[0] });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Failed to update user' });
+  }
+});
+
+app.get('/logistics/transfer-partners', authenticateToken, requireLogistics, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        transfer_partners.*,
+        from_user.full_name AS from_salesman_name,
+        from_user.phone AS from_salesman_phone,
+        to_user.full_name AS to_salesman_name,
+        to_user.phone AS to_salesman_phone
+      FROM transfer_partners
+      LEFT JOIN users from_user ON from_user.id = transfer_partners.from_salesman_id
+      LEFT JOIN users to_user ON to_user.id = transfer_partners.to_salesman_id
+      ORDER BY transfer_partners.is_active DESC, transfer_partners.id DESC
+    `);
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Failed to fetch transfer partners' });
+  }
+});
+
+app.post('/logistics/transfer-partners', authenticateToken, requireLogistics, async (req, res) => {
+  try {
+    const fromSalesmanId = Number(req.body.from_salesman_id || 0);
+    const toSalesmanId = Number(req.body.to_salesman_id || 0);
+
+    if (!fromSalesmanId || !toSalesmanId || fromSalesmanId === toSalesmanId) {
+      return res.status(400).json({ message: 'Choose two different salesmen' });
+    }
+
+    const usersResult = await pool.query(
+      `SELECT id, full_name, route_number
+       FROM users
+       WHERE id = ANY($1::int[])
+         AND role = 'salesman'
+         AND is_active = true`,
+      [[fromSalesmanId, toSalesmanId]]
+    );
+
+    if (usersResult.rows.length !== 2) {
+      return res.status(400).json({ message: 'Both transfer partners must be active salesmen' });
+    }
+
+    const fromUser = usersResult.rows.find((user) => user.id === fromSalesmanId);
+    const toUser = usersResult.rows.find((user) => user.id === toSalesmanId);
+
+    const result = await pool.query(
+      `INSERT INTO transfer_partners
+       (from_salesman_id, to_salesman_id, from_route, to_route, notes, is_active, created_by)
+       VALUES ($1, $2, $3, $4, $5, true, $6)
+       ON CONFLICT (from_salesman_id, to_salesman_id)
+       DO UPDATE SET
+         from_route = EXCLUDED.from_route,
+         to_route = EXCLUDED.to_route,
+         notes = EXCLUDED.notes,
+         is_active = true,
+         updated_at = CURRENT_TIMESTAMP
+       RETURNING *`,
+      [
+        fromSalesmanId,
+        toSalesmanId,
+        fromUser.route_number || '',
+        toUser.route_number || '',
+        req.body.notes || '',
+        req.user.id
+      ]
+    );
+
+    res.status(201).json({ message: 'Transfer partner approved', partner: result.rows[0] });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Failed to approve transfer partner' });
+  }
+});
+
+app.delete('/logistics/transfer-partners/:id', authenticateToken, requireLogistics, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(
+      `UPDATE transfer_partners
+       SET is_active = false,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1
+       RETURNING *`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Transfer partner not found' });
+    }
+
+    res.json({ message: 'Transfer partner removed', partner: result.rows[0] });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Failed to remove transfer partner' });
   }
 });
 
@@ -1348,17 +1512,17 @@ app.post('/salesman/location', authenticateToken, async (req, res) => {
     const latitude = toCoordinate(req.body.latitude);
     const longitude = toCoordinate(req.body.longitude);
     const accuracy = toCoordinate(req.body.accuracy);
-    const routeNumber = String(req.body.route_number || '950').trim() || '950';
 
     if (latitude === null || longitude === null) {
       return res.status(400).json({ message: 'Valid latitude and longitude are required' });
     }
 
     const userResult = await pool.query(
-      'SELECT full_name FROM users WHERE id = $1',
+      'SELECT full_name, route_number FROM users WHERE id = $1',
       [req.user.id]
     );
     const salesmanName = userResult.rows[0]?.full_name || req.user.phone || 'Salesman';
+    const routeNumber = String(req.body.route_number || userResult.rows[0]?.route_number || '950').trim() || '950';
 
     const locationResult = await pool.query(
       `INSERT INTO salesman_locations
@@ -1395,14 +1559,135 @@ app.post('/salesman/location', authenticateToken, async (req, res) => {
   }
 });
 
+app.get('/salesman/nearby', authenticateToken, async (req, res) => {
+  try {
+    if (!['salesman', 'manager', 'admin', 'logistics'].includes(req.user.role)) {
+      return res.status(403).json({ message: 'Salesman access required' });
+    }
+
+    const radius = Number(req.query.radius || 600);
+    const currentUserResult = await pool.query(
+      `SELECT users.id, users.full_name, users.route_number, salesman_locations.latitude, salesman_locations.longitude, salesman_locations.updated_at
+       FROM users
+       LEFT JOIN salesman_locations ON salesman_locations.salesman_id = users.id
+       WHERE users.id = $1`,
+      [req.user.id]
+    );
+    const currentUser = currentUserResult.rows[0];
+
+    const liveResult = await pool.query(
+      `SELECT
+        users.id,
+        users.full_name,
+        users.phone,
+        users.route_number,
+        users.area,
+        users.can_receive_transfers,
+        salesman_locations.latitude,
+        salesman_locations.longitude,
+        salesman_locations.accuracy,
+        salesman_locations.updated_at
+       FROM users
+       JOIN salesman_locations ON salesman_locations.salesman_id = users.id
+       WHERE users.role = 'salesman'
+         AND users.is_active = true
+         AND users.can_receive_transfers = true
+         AND users.id <> $1`,
+      [req.user.id]
+    );
+
+    const approvedResult = await pool.query(
+      `SELECT
+        transfer_partners.id AS partner_id,
+        transfer_partners.from_salesman_id,
+        transfer_partners.to_salesman_id,
+        transfer_partners.from_route,
+        transfer_partners.to_route,
+        transfer_partners.notes,
+        transfer_partners.is_active,
+        users.id,
+        users.full_name,
+        users.phone,
+        users.route_number,
+        users.area,
+        users.can_receive_transfers,
+        salesman_locations.latitude,
+        salesman_locations.longitude,
+        salesman_locations.accuracy,
+        salesman_locations.updated_at
+       FROM transfer_partners
+       JOIN users ON users.id = transfer_partners.to_salesman_id
+       LEFT JOIN salesman_locations ON salesman_locations.salesman_id = users.id
+       WHERE transfer_partners.from_salesman_id = $1
+         AND transfer_partners.is_active = true
+         AND users.is_active = true
+         AND users.can_receive_transfers = true`,
+      [req.user.id]
+    );
+
+    const byId = new Map();
+    function addCandidate(row, source) {
+      const hasDistance = currentUser?.latitude && currentUser?.longitude && row.latitude && row.longitude;
+      const distance = hasDistance
+        ? distanceMeters(currentUser.latitude, currentUser.longitude, row.latitude, row.longitude)
+        : null;
+
+      if (source === 'nearby' && (distance === null || distance > radius || !isFreshLocation(row.updated_at))) {
+        return;
+      }
+
+      const existing = byId.get(row.id);
+      byId.set(row.id, {
+        id: row.id,
+        full_name: row.full_name,
+        phone: row.phone,
+        route_number: row.route_number || '',
+        area: row.area || '',
+        distance_meters: distance,
+        location_fresh: isFreshLocation(row.updated_at),
+        transfer_source: existing?.transfer_source === 'approved_partner' ? 'approved_partner' : source,
+        approved_partner: source === 'approved_partner' || existing?.approved_partner || false
+      });
+    }
+
+    liveResult.rows.forEach((row) => addCandidate(row, 'nearby'));
+    approvedResult.rows.forEach((row) => addCandidate(row, 'approved_partner'));
+
+    const salesmen = [...byId.values()].sort((left, right) => {
+      const leftDistance = left.distance_meters ?? Number.POSITIVE_INFINITY;
+      const rightDistance = right.distance_meters ?? Number.POSITIVE_INFINITY;
+      return leftDistance - rightDistance;
+    });
+
+    res.json(salesmen);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Failed to fetch nearby salesmen' });
+  }
+});
+
 app.get('/salesman/transfers', authenticateToken, async (req, res) => {
   try {
-    const result = await pool.query(`
-      SELECT *
-      FROM stock_transfers
-      ORDER BY id DESC
-      LIMIT 100
-    `);
+    const canSeeAll = ['manager', 'admin', 'logistics'].includes(req.user.role);
+    const result = await pool.query(
+      `SELECT
+        stock_transfers.*,
+        creator.full_name AS created_by_name,
+        from_user.full_name AS from_salesman_name,
+        to_user.full_name AS to_salesman_name
+       FROM stock_transfers
+       LEFT JOIN users creator ON creator.id = stock_transfers.created_by
+       LEFT JOIN users from_user ON from_user.id = stock_transfers.from_salesman_id
+       LEFT JOIN users to_user ON to_user.id = stock_transfers.to_salesman_id
+       WHERE $1::boolean = true
+          OR stock_transfers.created_by = $2
+          OR stock_transfers.requested_by = $2
+          OR stock_transfers.from_salesman_id = $2
+          OR stock_transfers.to_salesman_id = $2
+       ORDER BY stock_transfers.id DESC
+       LIMIT 100`,
+      [canSeeAll, req.user.id]
+    );
 
     res.json(result.rows);
   } catch (error) {
@@ -1413,13 +1698,19 @@ app.get('/salesman/transfers', authenticateToken, async (req, res) => {
 
 app.post('/salesman/transfers', authenticateToken, async (req, res) => {
   try {
+    if (!['salesman', 'manager', 'admin', 'logistics'].includes(req.user.role)) {
+      return res.status(403).json({ message: 'Salesman transfer access required' });
+    }
+
     const {
       request_type,
       source_type,
       from_route,
       from_salesman,
+      from_salesman_id,
       to_route,
       to_salesman,
+      to_salesman_id,
       product,
       quantity,
       unit,
@@ -1430,22 +1721,123 @@ app.post('/salesman/transfers', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: 'Request type is required' });
     }
 
+    const requesterResult = await pool.query(
+      'SELECT id, full_name, route_number FROM users WHERE id = $1',
+      [req.user.id]
+    );
+    const requester = requesterResult.rows[0];
+    const requestType = String(request_type);
+    const sourceType = source_type || 'nearby_salesman';
+    const selectedSalesmanId = Number(to_salesman_id || from_salesman_id || 0);
+    let fromSalesmanId = Number(from_salesman_id || 0) || null;
+    let toSalesmanId = Number(to_salesman_id || 0) || null;
+    let fromRoute = from_route || '';
+    let toRoute = to_route || requester?.route_number || '950';
+    let fromSalesmanName = from_salesman || '';
+    let toSalesmanName = to_salesman || requester?.full_name || 'Route Salesman';
+    let logisticsApproved = false;
+
+    if (sourceType !== 'depot') {
+      if (!selectedSalesmanId) {
+        return res.status(400).json({ message: 'Select an approved or nearby salesman' });
+      }
+
+      const targetResult = await pool.query(
+        `SELECT id, full_name, route_number, can_receive_transfers, is_active
+         FROM users
+         WHERE id = $1
+           AND role = 'salesman'`,
+        [selectedSalesmanId]
+      );
+
+      if (targetResult.rows.length === 0) {
+        return res.status(400).json({ message: 'Selected salesman was not found' });
+      }
+
+      const target = targetResult.rows[0];
+      if (!target.is_active || !target.can_receive_transfers) {
+        return res.status(400).json({ message: 'Selected salesman is not available for transfers' });
+      }
+
+      const agreementResult = await pool.query(
+        `SELECT id
+         FROM transfer_partners
+         WHERE from_salesman_id = $1
+           AND to_salesman_id = $2
+           AND is_active = true`,
+        [req.user.id, selectedSalesmanId]
+      );
+      logisticsApproved = agreementResult.rows.length > 0;
+
+      const locationResult = await pool.query(
+        `SELECT
+          current_location.latitude AS current_latitude,
+          current_location.longitude AS current_longitude,
+          target_location.latitude AS target_latitude,
+          target_location.longitude AS target_longitude,
+          target_location.updated_at AS target_updated_at
+         FROM salesman_locations current_location
+         CROSS JOIN salesman_locations target_location
+         WHERE current_location.salesman_id = $1
+           AND target_location.salesman_id = $2`,
+        [req.user.id, selectedSalesmanId]
+      );
+
+      let isNearby = false;
+      if (locationResult.rows[0]) {
+        const row = locationResult.rows[0];
+        const distance = distanceMeters(row.current_latitude, row.current_longitude, row.target_latitude, row.target_longitude);
+        isNearby = distance <= 600 && isFreshLocation(row.target_updated_at);
+      }
+
+      if (!logisticsApproved && !isNearby) {
+        return res.status(400).json({ message: 'Transfer requires a nearby salesman or logistics-approved partner' });
+      }
+
+      if (requestType === 'Offer Stock') {
+        fromSalesmanId = req.user.id;
+        fromSalesmanName = requester?.full_name || 'Current Salesman';
+        fromRoute = requester?.route_number || '950';
+        toSalesmanId = target.id;
+        toSalesmanName = target.full_name;
+        toRoute = target.route_number || '';
+      } else {
+        fromSalesmanId = target.id;
+        fromSalesmanName = target.full_name;
+        fromRoute = target.route_number || '';
+        toSalesmanId = req.user.id;
+        toSalesmanName = requester?.full_name || 'Current Salesman';
+        toRoute = requester?.route_number || '950';
+      }
+    } else {
+      fromRoute = 'DEPOT';
+      fromSalesmanName = 'Depot';
+      toSalesmanId = req.user.id;
+      toSalesmanName = requester?.full_name || 'Route Salesman';
+      toRoute = requester?.route_number || '950';
+    }
+
     const result = await pool.query(
       `INSERT INTO stock_transfers
-       (request_type, source_type, from_route, from_salesman, to_route, to_salesman, product, quantity, unit, status, notes, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'Requested', $10, $11)
+       (request_type, source_type, from_route, from_salesman, from_salesman_id, to_route, to_salesman, to_salesman_id, product, quantity, unit, status, notes, transfer_channel, logistics_approved, requested_by, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'Requested', $12, $13, $14, $15, $16)
        RETURNING *`,
       [
-        request_type,
-        source_type || 'nearby_salesman',
-        from_route || '',
-        from_salesman || '',
-        to_route || '950',
-        to_salesman || '',
+        requestType,
+        sourceType,
+        fromRoute,
+        fromSalesmanName,
+        fromSalesmanId,
+        toRoute,
+        toSalesmanName,
+        toSalesmanId,
         product || '',
         Number(quantity || 0),
         unit || 'cartons',
         notes || '',
+        sourceType,
+        logisticsApproved,
+        req.user.id,
         req.user.id
       ]
     );
@@ -1464,6 +1856,11 @@ app.patch('/salesman/transfers/:id/status', authenticateToken, async (req, res) 
   try {
     const { id } = req.params;
     const { status } = req.body;
+    const allowedStatuses = ['Requested', 'Accepted', 'Rejected', 'Sender Confirmed', 'Receiver Confirmed', 'Transfer Complete', 'Cancelled'];
+
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({ message: 'Invalid transfer status' });
+    }
 
     const result = await pool.query(
       `UPDATE stock_transfers

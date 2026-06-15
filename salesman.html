@@ -668,8 +668,8 @@
     </section>
 
     <section class="panel">
-      <h2>Product Transfer Between Two Salesmen</h2>
-      <div class="panel-body">
+        <h2>Professional Stock Transfer</h2>
+        <div class="panel-body">
         <div class="transfer-flow">
           <div class="transfer-step">
             <span class="step-number">1</span>
@@ -679,7 +679,7 @@
           <div class="transfer-step">
             <span class="step-number">2</span>
             <strong>Salesman Accepts</strong>
-            <div class="details">Available salesman accepts or rejects.</div>
+            <div class="details">Only nearby or logistics-approved salesman can be selected.</div>
           </div>
           <div class="transfer-step">
             <span class="step-number">3</span>
@@ -704,7 +704,7 @@
             <option value="Depot Support">Depot Support</option>
           </select>
           <select id="transferSource" name="source_type">
-            <option value="nearby_salesman">Nearby Salesman</option>
+            <option value="nearby_salesman">Nearby / Approved Salesman</option>
             <option value="depot">Depot</option>
           </select>
           <select id="transferSalesman" name="salesman"></select>
@@ -804,11 +804,9 @@
     };
     const todayKey = new Date().toISOString().slice(0, 10);
     const visitStorageKey = `almarai-salesman-visits-${todayKey}`;
-    const nearbySalesmen = [
-      { name: 'Ahmed', route: '950', distance: 180, status: 'Available' },
-      { name: 'Khalid', route: '952', distance: 420, status: 'Available' },
-      { name: 'Yusuf', route: '955', distance: 580, status: 'Busy' }
-    ];
+    let currentProfile = null;
+    let currentRoute = '950';
+    let nearbySalesmen = [];
     let customers = [];
     let requests = [];
     let visits = [];
@@ -894,7 +892,8 @@
       ].join(' ').toLowerCase();
 
       return (!query || text.includes(query))
-        && (typeFilter === 'All' || customer.customer_type === typeFilter);
+        && (typeFilter === 'All' || customer.customer_type === typeFilter)
+        && (!currentRoute || customer.route_number === currentRoute);
     }
 
     function saveVisits() {
@@ -937,7 +936,7 @@
         const result = await api('/salesman/location', {
           method: 'POST',
           body: JSON.stringify({
-            route_number: '950',
+            route_number: currentRoute,
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
             accuracy: position.coords.accuracy
@@ -949,6 +948,8 @@
         status.textContent = alertCount
           ? `Location sent. ${alertCount} customer alert(s) created.`
           : 'Location sent. No nearby customer alert yet.';
+        nearbySalesmen = await api('/salesman/nearby?radius=600');
+        renderNearbySalesmen();
       } catch (error) {
         status.className = 'status error';
         status.textContent = `Location failed: ${error.message}`;
@@ -986,13 +987,14 @@
 
     function renderSummary() {
       const openRequests = requests.filter((request) => !['Handled', 'Cancelled'].includes(request.status));
-      const visitedCount = customers.filter((customer) => visited[customer.id]).length;
+      const routeCustomers = customers.filter((customer) => !currentRoute || customer.route_number === currentRoute);
+      const visitedCount = routeCustomers.filter((customer) => visited[customer.id]).length;
       const sentCount = transfers.filter((transfer) => transfer.request_type !== 'Breakdown').length;
       const receivedCount = transfers.filter((transfer) => transfer.status === 'Received' || transfer.status === 'Transfer Complete').length;
 
-      document.getElementById('customerCount').textContent = customers.length;
+      document.getElementById('customerCount').textContent = routeCustomers.length;
       document.getElementById('visitedCount').textContent = visitedCount;
-      document.getElementById('pendingVisitCount').textContent = Math.max(customers.length - visitedCount, 0);
+      document.getElementById('pendingVisitCount').textContent = Math.max(routeCustomers.length - visitedCount, 0);
       document.getElementById('openRequestCount').textContent = openRequests.length;
       document.getElementById('stockLineCount').textContent = routeStock.length;
       document.getElementById('summaryReceived').textContent = receivedCount;
@@ -1004,23 +1006,33 @@
       const target = document.getElementById('nearbySalesmen');
       const transferSalesman = document.getElementById('transferSalesman');
 
+      if (nearbySalesmen.length === 0) {
+        target.innerHTML = '<div class="empty">No nearby or logistics-approved salesman available. Start location sharing or ask logistics to approve a transfer partner.</div>';
+        transferSalesman.innerHTML = '<option value="">No salesman available</option>';
+        return;
+      }
+
       target.innerHTML = nearbySalesmen.map((salesman) => {
-        const statusClass = salesman.status === 'Available' ? 'positive' : 'warning';
+        const distance = salesman.distance_meters === null || salesman.distance_meters === undefined
+          ? 'Approved'
+          : `${Math.round(Number(salesman.distance_meters))}m`;
+        const sourceLabel = salesman.approved_partner ? 'Approved Partner' : 'Nearby';
+        const statusClass = salesman.location_fresh || salesman.approved_partner ? 'positive' : 'warning';
 
         return `
           <div class="nearby-card">
-            <span class="avatar">${escapeHtml(salesman.name.charAt(0))}</span>
+            <span class="avatar">${escapeHtml((salesman.full_name || '?').charAt(0))}</span>
             <div>
-              <strong>${escapeHtml(salesman.name)}</strong><br>
-              <span class="details">Route ${escapeHtml(salesman.route)} | ${salesman.distance}m</span>
+              <strong>${escapeHtml(salesman.full_name)}</strong><br>
+              <span class="details">Route ${escapeHtml(salesman.route_number || '')} | ${distance}</span>
             </div>
-            <span class="${statusClass}">${escapeHtml(salesman.status)}</span>
+            <span class="${statusClass}">${sourceLabel}</span>
           </div>
         `;
       }).join('');
 
       transferSalesman.innerHTML = nearbySalesmen.map((salesman) => `
-        <option value="${escapeHtml(salesman.name)}">${escapeHtml(salesman.name)} - Route ${escapeHtml(salesman.route)} - ${salesman.distance}m</option>
+        <option value="${salesman.id}">${escapeHtml(salesman.full_name)} - Route ${escapeHtml(salesman.route_number || '')}</option>
       `).join('');
     }
 
@@ -1037,12 +1049,12 @@
       target.innerHTML = transfers.slice(-5).reverse().map((transfer) => `
         #${transfer.id} - ${escapeHtml(transfer.request_type)}:
         ${escapeHtml(transfer.quantity || '')} ${escapeHtml(transfer.unit || '')} ${escapeHtml(transfer.product || '')}
-        ${transfer.from_salesman ? `from ${escapeHtml(transfer.from_salesman)}` : ''}
+        ${transfer.from_salesman_name || transfer.from_salesman ? `from ${escapeHtml(transfer.from_salesman_name || transfer.from_salesman)}` : ''}
         ${transfer.source_type === 'depot' ? 'from Depot' : ''}
         (${escapeHtml(transfer.status)})
       `).join('<br>');
 
-      const openTransfers = transfers.filter((transfer) => !['Received', 'Cancelled', 'Transfer Complete'].includes(transfer.status));
+      const openTransfers = transfers.filter((transfer) => !['Cancelled', 'Rejected', 'Transfer Complete'].includes(transfer.status));
 
       if (openTransfers.length === 0) {
         active.innerHTML = '<div class="empty">No active stock/support requests.</div>';
@@ -1056,13 +1068,14 @@
             <strong>#${transfer.id} ${escapeHtml(transfer.request_type)}</strong><br>
             <span class="details">
               ${escapeHtml(transfer.quantity || '')} ${escapeHtml(transfer.unit || '')} ${escapeHtml(transfer.product || '')}<br>
-              From: ${escapeHtml(transfer.source_type === 'depot' ? 'Depot' : transfer.from_salesman || 'Nearby Salesman')}
+              From: ${escapeHtml(transfer.source_type === 'depot' ? 'Depot' : transfer.from_salesman_name || transfer.from_salesman || 'Nearby Salesman')}
               ${transfer.from_route ? `Route ${escapeHtml(transfer.from_route)}` : ''}
-              | To: Route ${escapeHtml(transfer.to_route || '950')}
+              | To: ${escapeHtml(transfer.to_salesman_name || transfer.to_salesman || 'Route Salesman')} Route ${escapeHtml(transfer.to_route || '950')}
+              ${transfer.logistics_approved ? '<br>Logistics approved partner' : ''}
             </span>
           </div>
           <select onchange="updateTransferStatus(${transfer.id}, this.value)">
-            ${['Requested', 'Accepted', 'Sent', 'Received', 'Cancelled'].map((status) => `
+            ${['Requested', 'Accepted', 'Rejected', 'Sender Confirmed', 'Receiver Confirmed', 'Transfer Complete', 'Cancelled'].map((status) => `
               <option value="${status}" ${transfer.status === status ? 'selected' : ''}>${status}</option>
             `).join('')}
           </select>
@@ -1093,14 +1106,16 @@
     }
 
     async function createStockRequest(type) {
-      const firstAvailable = nearbySalesmen.find((salesman) => salesman.status === 'Available') || nearbySalesmen[0];
+      const firstAvailable = nearbySalesmen[0];
+      if (!firstAvailable) {
+        alert('No nearby or approved salesman is available. Start location sharing or ask logistics to approve a partner.');
+        return;
+      }
+
       await createTransfer({
         request_type: type === 'Offer Help' ? 'Offer Stock' : 'Need Stock',
         source_type: 'nearby_salesman',
-        from_route: firstAvailable.route,
-        from_salesman: firstAvailable.name,
-        to_route: '950',
-        to_salesman: 'Route 950 Salesman',
+        to_salesman_id: firstAvailable.id,
         product: 'Milk',
         quantity: 20,
         unit: 'cartons',
@@ -1115,8 +1130,8 @@
         source_type: 'depot',
         from_route: 'DEPOT',
         from_salesman: 'Depot',
-        to_route: '950',
-        to_salesman: 'Route 950 Salesman',
+        to_route: currentRoute,
+        to_salesman: currentProfile?.full_name || 'Route Salesman',
         product: 'Mixed Stock',
         quantity: 0,
         unit: 'support',
@@ -1128,15 +1143,17 @@
     async function createBreakdownRequest() {
       const nearest = nearbySalesmen
         .slice()
-        .sort((left, right) => left.distance - right.distance)[0];
+        .sort((left, right) => (left.distance_meters || 999999) - (right.distance_meters || 999999))[0];
+
+      if (!nearest) {
+        alert('No nearby or approved salesman is available for breakdown assistance.');
+        return;
+      }
 
       await createTransfer({
         request_type: 'Breakdown',
         source_type: 'nearby_salesman',
-        from_route: nearest.route,
-        from_salesman: nearest.name,
-        to_route: '950',
-        to_salesman: 'Route 950 Salesman',
+        to_salesman_id: nearest.id,
         product: '',
         quantity: 0,
         unit: 'assistance',
@@ -1262,12 +1279,16 @@
       status.textContent = 'Loading...';
 
       try {
-        [customers, requests, transfers, routeStock, visits] = await Promise.all([
+        currentProfile = await api('/profile');
+        currentRoute = currentProfile?.route_number || '950';
+
+        [customers, requests, transfers, routeStock, visits, nearbySalesmen] = await Promise.all([
           api('/admin/customers'),
           api('/admin/custom-requests'),
           api('/salesman/transfers'),
-          api('/route-stock?route=950'),
-          api('/customer-visits?route=950')
+          api(`/route-stock?route=${encodeURIComponent(currentRoute)}`),
+          api(`/customer-visits?route=${encodeURIComponent(currentRoute)}`),
+          api('/salesman/nearby?radius=600')
         ]);
 
         visits.forEach((visit) => {
@@ -1309,17 +1330,18 @@
 
     async function submitTransfer(event) {
       event.preventDefault();
-      const salesmanText = document.getElementById('transferSalesman').value;
-      const salesman = nearbySalesmen.find((item) => salesmanText.includes(item.name)) || nearbySalesmen[0];
+      const selectedSalesmanId = Number(document.getElementById('transferSalesman').value || 0);
       const sourceType = document.getElementById('transferSource').value;
+
+      if (sourceType !== 'depot' && !selectedSalesmanId) {
+        alert('Choose a nearby or logistics-approved salesman first.');
+        return;
+      }
 
       await createTransfer({
         request_type: document.getElementById('transferType').value,
         source_type: sourceType,
-        from_route: sourceType === 'depot' ? 'DEPOT' : salesman.route,
-        from_salesman: sourceType === 'depot' ? 'Depot' : salesman.name,
-        to_route: '950',
-        to_salesman: 'Route 950 Salesman',
+        to_salesman_id: sourceType === 'depot' ? null : selectedSalesmanId,
         product: document.getElementById('transferProduct').value,
         quantity: document.getElementById('transferQuantity').value,
         unit: 'cartons',
