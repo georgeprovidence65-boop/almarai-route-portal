@@ -402,6 +402,10 @@
         <span>Pending Requests</span>
         <strong id="requestCount">0</strong>
       </div>
+      <div class="metric">
+        <span>Pending Access</span>
+        <strong id="accessRequestCount">0</strong>
+      </div>
     </section>
 
     <section class="grid">
@@ -951,6 +955,8 @@
       document.getElementById('customerCount').textContent = customers.length;
       document.getElementById('requestCount').textContent =
         requests.filter((request) => request.status !== 'Handled').length;
+      document.getElementById('accessRequestCount').textContent =
+        accessRequests.filter((request) => request.status === 'Pending').length;
     }
 
     function renderAreas() {
