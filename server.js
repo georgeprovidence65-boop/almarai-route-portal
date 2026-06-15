@@ -474,6 +474,196 @@ app.post('/login', async (req, res) => {
   }
 });
 
+app.post('/access-requests', async (req, res) => {
+  try {
+    const {
+      full_name,
+      phone,
+      password,
+      requested_role,
+      route_number,
+      area,
+      customer_code,
+      notes
+    } = req.body;
+
+    if (!full_name || !phone || !password) {
+      return res.status(400).json({ message: 'Name, phone, and password are required' });
+    }
+
+    const allowedRequestRoles = ['customer', 'salesman'];
+    const role = allowedRequestRoles.includes(requested_role) ? requested_role : 'customer';
+
+    const existingUser = await pool.query(
+      'SELECT id FROM users WHERE phone = $1',
+      [phone]
+    );
+
+    if (existingUser.rows.length > 0) {
+      return res.status(409).json({ message: 'This phone already has a login. Please use Login or contact manager.' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const result = await pool.query(
+      `INSERT INTO access_requests
+       (full_name, phone, password_hash, requested_role, route_number, area, customer_code, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id, full_name, phone, requested_role, route_number, area, customer_code, status, created_at`,
+      [
+        full_name,
+        phone,
+        passwordHash,
+        role,
+        route_number || '',
+        area || '',
+        customer_code || '',
+        notes || ''
+      ]
+    );
+
+    res.status(201).json({
+      message: 'Access request submitted. Please wait for manager approval.',
+      request: result.rows[0]
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Failed to submit access request' });
+  }
+});
+
+app.get('/admin/access-requests', authenticateToken, requireManager, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        access_requests.id,
+        access_requests.full_name,
+        access_requests.phone,
+        access_requests.requested_role,
+        access_requests.route_number,
+        access_requests.area,
+        access_requests.customer_code,
+        access_requests.notes,
+        access_requests.status,
+        access_requests.reviewed_at,
+        access_requests.created_user_id,
+        access_requests.created_at,
+        reviewer.full_name AS reviewed_by_name
+      FROM access_requests
+      LEFT JOIN users reviewer ON reviewer.id = access_requests.reviewed_by
+      ORDER BY access_requests.id DESC
+    `);
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Failed to fetch access requests' });
+  }
+});
+
+app.post('/admin/access-requests/:id/approve', authenticateToken, requireManager, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const requestResult = await pool.query(
+      `SELECT *
+       FROM access_requests
+       WHERE id = $1`,
+      [id]
+    );
+
+    if (requestResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Access request not found' });
+    }
+
+    const request = requestResult.rows[0];
+    if (request.status !== 'Pending') {
+      return res.status(400).json({ message: 'Only pending requests can be approved' });
+    }
+
+    const existingUser = await pool.query(
+      'SELECT id FROM users WHERE phone = $1',
+      [request.phone]
+    );
+
+    if (existingUser.rows.length > 0) {
+      await pool.query(
+        `UPDATE access_requests
+         SET status = 'Duplicate',
+             reviewed_by = $1,
+             reviewed_at = CURRENT_TIMESTAMP
+         WHERE id = $2`,
+        [req.user.id, id]
+      );
+      return res.status(409).json({ message: 'A user with this phone already exists' });
+    }
+
+    const allowedRoles = ['salesman', 'customer'];
+    const role = allowedRoles.includes(request.requested_role) ? request.requested_role : 'customer';
+    const createdUser = await pool.query(
+      `INSERT INTO users
+       (full_name, phone, password, role, route_number, area, can_receive_transfers, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, true)
+       RETURNING id, full_name, phone, role, route_number, area`,
+      [
+        request.full_name,
+        request.phone,
+        request.password_hash,
+        role,
+        request.route_number || '',
+        request.area || '',
+        role === 'salesman'
+      ]
+    );
+
+    const updatedRequest = await pool.query(
+      `UPDATE access_requests
+       SET status = 'Approved',
+           reviewed_by = $1,
+           reviewed_at = CURRENT_TIMESTAMP,
+           created_user_id = $2
+       WHERE id = $3
+       RETURNING id, full_name, phone, requested_role, status, created_user_id, reviewed_at`,
+      [req.user.id, createdUser.rows[0].id, id]
+    );
+
+    res.json({
+      message: 'Access request approved and login created',
+      request: updatedRequest.rows[0],
+      user: createdUser.rows[0]
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Failed to approve access request' });
+  }
+});
+
+app.patch('/admin/access-requests/:id/status', authenticateToken, requireManager, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const allowedStatuses = ['Rejected', 'Cancelled'];
+    const status = allowedStatuses.includes(req.body.status) ? req.body.status : 'Rejected';
+
+    const result = await pool.query(
+      `UPDATE access_requests
+       SET status = $1,
+           reviewed_by = $2,
+           reviewed_at = CURRENT_TIMESTAMP
+       WHERE id = $3
+       RETURNING id, full_name, phone, requested_role, status, reviewed_at`,
+      [status, req.user.id, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Access request not found' });
+    }
+
+    res.json({ message: 'Access request updated', request: result.rows[0] });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Failed to update access request' });
+  }
+});
+
 app.get('/profile', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(

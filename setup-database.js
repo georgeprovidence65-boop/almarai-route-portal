@@ -16,6 +16,23 @@ async function setupDatabase() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
+      CREATE TABLE IF NOT EXISTS access_requests (
+        id SERIAL PRIMARY KEY,
+        full_name VARCHAR(100) NOT NULL,
+        phone VARCHAR(30) NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        requested_role VARCHAR(20) DEFAULT 'customer',
+        route_number VARCHAR(30) DEFAULT '',
+        area VARCHAR(150) DEFAULT '',
+        customer_code VARCHAR(30) DEFAULT '',
+        notes TEXT DEFAULT '',
+        status VARCHAR(30) DEFAULT 'Pending',
+        reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        reviewed_at TIMESTAMP,
+        created_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
       CREATE TABLE IF NOT EXISTS products (
         id SERIAL PRIMARY KEY,
         name VARCHAR(150) NOT NULL,

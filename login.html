@@ -38,7 +38,9 @@
       font-weight: 700;
       margin-bottom: 6px;
     }
-    input {
+    input,
+    select,
+    textarea {
       border: 1px solid #d7e1e8;
       border-radius: 8px;
       font: inherit;
@@ -46,6 +48,7 @@
       padding: 9px 11px;
       width: 100%;
     }
+    textarea { min-height: 82px; resize: vertical; }
     .field { margin-bottom: 13px; }
     button {
       background: linear-gradient(135deg, #08783a, #05a653);
@@ -79,6 +82,36 @@
     }
     .status { color: #5d6e7e; font-size: 14px; line-height: 1.4; margin-top: 12px; min-height: 20px; }
     .status.error { color: #a92736; font-weight: 700; }
+    .status.success { color: #08783a; font-weight: 700; }
+    .divider {
+      border-top: 1px solid #d7e1e8;
+      color: #5d6e7e;
+      font-size: 13px;
+      padding: 14px 20px 0;
+      text-align: center;
+    }
+    .request-toggle {
+      background: transparent;
+      border: 1px solid #cbe2d4;
+      color: #08783a;
+      margin: 10px 20px 20px;
+      width: calc(100% - 40px);
+    }
+    .request-form {
+      border-top: 1px solid #d7e1e8;
+      display: none;
+    }
+    .request-form.active {
+      display: block;
+    }
+    .two {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: 1fr 1fr;
+    }
+    @media (max-width: 460px) {
+      .two { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
@@ -99,12 +132,61 @@
       <button type="submit" data-i18n="login">Login</button>
       <div id="status" class="status"></div>
     </form>
+    <div class="divider">No login yet?</div>
+    <button class="request-toggle" type="button" onclick="toggleRequestForm()">Request Access</button>
+    <form id="accessRequestForm" class="request-form">
+      <div class="field">
+        <label for="request_full_name">Full Name</label>
+        <input id="request_full_name" name="full_name" placeholder="Your name" required>
+      </div>
+      <div class="field">
+        <label for="request_phone">Phone</label>
+        <input id="request_phone" name="phone" placeholder="054..." inputmode="tel" required>
+      </div>
+      <div class="field">
+        <label for="request_password">Choose Password/PIN</label>
+        <input id="request_password" name="password" type="password" minlength="4" required>
+      </div>
+      <div class="two">
+        <div class="field">
+          <label for="request_role">I am requesting access as</label>
+          <select id="request_role" name="requested_role">
+            <option value="customer">Customer</option>
+            <option value="salesman">Salesman</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="request_route">Route</label>
+          <input id="request_route" name="route_number" placeholder="950">
+        </div>
+      </div>
+      <div class="two">
+        <div class="field">
+          <label for="request_area">Area</label>
+          <input id="request_area" name="area" placeholder="Wadi Laban">
+        </div>
+        <div class="field">
+          <label for="request_customer_code">Customer ID</label>
+          <input id="request_customer_code" name="customer_code" placeholder="If customer">
+        </div>
+      </div>
+      <div class="field">
+        <label for="request_notes">Notes</label>
+        <textarea id="request_notes" name="notes" placeholder="Example: Route 950 salesman, Wadi Laban customer, shop name..."></textarea>
+      </div>
+      <button type="submit">Submit Request</button>
+      <div id="requestStatus" class="status"></div>
+    </form>
   </main>
 
   <script src="/i18n.js"></script>
   <script>
     const API = window.location.origin;
     const params = new URLSearchParams(window.location.search);
+
+    function toggleRequestForm() {
+      document.getElementById('accessRequestForm').classList.toggle('active');
+    }
 
     async function login(event) {
       event.preventDefault();
@@ -136,7 +218,33 @@
       }
     }
 
+    async function submitAccessRequest(event) {
+      event.preventDefault();
+      const status = document.getElementById('requestStatus');
+      const body = Object.fromEntries(new FormData(event.target).entries());
+      status.className = 'status';
+      status.textContent = 'Submitting request...';
+
+      try {
+        const response = await fetch(`${API}/access-requests`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || 'Request failed');
+
+        event.target.reset();
+        status.className = 'status success';
+        status.textContent = data.message;
+      } catch (error) {
+        status.className = 'status error';
+        status.textContent = error.message;
+      }
+    }
+
     document.getElementById('loginForm').addEventListener('submit', login);
+    document.getElementById('accessRequestForm').addEventListener('submit', submitAccessRequest);
   </script>
 </body>
 </html>

@@ -511,6 +511,29 @@
       </article>
 
       <article class="panel">
+        <h2>Access Requests</h2>
+        <div class="panel-body">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Name</th>
+                  <th>Phone</th>
+                  <th>Role</th>
+                  <th>Route / Area</th>
+                  <th>Notes</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="accessRequestsTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </article>
+
+      <article class="panel">
         <h2>Customers</h2>
         <div class="panel-body">
           <form id="customerForm">
@@ -849,6 +872,7 @@
     let transfers = [];
     let routeStock = [];
     let transferPartners = [];
+    let accessRequests = [];
 
     function escapeHtml(value) {
       return String(value || '')
@@ -981,6 +1005,34 @@
       `).join('');
 
       renderSalesmanPartnerOptions();
+    }
+
+    function renderAccessRequests() {
+      const tbody = document.getElementById('accessRequestsTable');
+
+      if (accessRequests.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="empty">No access requests yet.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = accessRequests.map((request) => {
+        const canAct = request.status === 'Pending';
+        return `
+          <tr>
+            <td>${request.id}</td>
+            <td>${escapeHtml(request.full_name)}</td>
+            <td>${escapeHtml(request.phone)}</td>
+            <td>${escapeHtml(request.requested_role)}</td>
+            <td>${escapeHtml(request.route_number || '')}<br><span class="status">${escapeHtml(request.area || request.customer_code || '')}</span></td>
+            <td class="wrap">${escapeHtml(request.notes || '')}</td>
+            <td>${escapeHtml(request.status)}</td>
+            <td>
+              ${canAct ? `<button type="button" onclick="approveAccessRequest(${request.id})">Approve</button>` : ''}
+              ${canAct ? `<button class="danger" type="button" onclick="rejectAccessRequest(${request.id})">Reject</button>` : ''}
+            </td>
+          </tr>
+        `;
+      }).join('');
     }
 
     function renderSalesmanPartnerOptions() {
@@ -1222,6 +1274,12 @@
         }
 
         try {
+          accessRequests = await api('/admin/access-requests');
+        } catch (error) {
+          accessRequests = [];
+        }
+
+        try {
           transfers = await api('/salesman/transfers');
         } catch (error) {
           transfers = [];
@@ -1246,6 +1304,7 @@
         renderRequests();
         renderAreas();
         renderUsers();
+        renderAccessRequests();
         renderTransfers();
         renderTransferPartners();
         updateSummary();
@@ -1306,6 +1365,31 @@
 
         form.reset();
         document.getElementById('user_can_receive_transfers').value = 'true';
+        await loadAll();
+      } catch (error) {
+        setStatus(error.message, 'error');
+      }
+    }
+
+    async function approveAccessRequest(id) {
+      if (!confirm('Approve this request and create the login?')) return;
+
+      try {
+        await api(`/admin/access-requests/${id}/approve`, { method: 'POST' });
+        await loadAll();
+      } catch (error) {
+        setStatus(error.message, 'error');
+      }
+    }
+
+    async function rejectAccessRequest(id) {
+      if (!confirm('Reject this access request?')) return;
+
+      try {
+        await api(`/admin/access-requests/${id}/status`, {
+          method: 'PATCH',
+          body: JSON.stringify({ status: 'Rejected' })
+        });
         await loadAll();
       } catch (error) {
         setStatus(error.message, 'error');
