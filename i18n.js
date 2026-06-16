@@ -276,7 +276,10 @@
   function translateTextNode(node, allowRefresh) {
     if (shouldSkipNode(node)) return;
     const original = getOriginalText(node, allowRefresh);
-    node.nodeValue = localizeText(original, currentLanguage);
+    const translated = localizeText(original, currentLanguage);
+    if (node.nodeValue !== translated) {
+      node.nodeValue = translated;
+    }
   }
 
   function getAttributeStore(element) {
@@ -297,18 +300,27 @@
       store[attribute] = currentValue;
     }
 
-    element.setAttribute(attribute, localizeText(store[attribute], currentLanguage));
+    const translated = localizeText(store[attribute], currentLanguage);
+    if (element.getAttribute(attribute) !== translated) {
+      element.setAttribute(attribute, translated);
+    }
   }
 
   function translateElement(element, allowRefresh) {
     if (shouldSkipNode(element)) return;
 
     if (element.dataset && element.dataset.i18n) {
-      element.textContent = translateKey(element.dataset.i18n);
+      const translated = translateKey(element.dataset.i18n);
+      if (element.textContent !== translated) {
+        element.textContent = translated;
+      }
     }
 
     if (element.dataset && element.dataset.i18nPlaceholder) {
-      element.placeholder = translateKey(element.dataset.i18nPlaceholder);
+      const translated = translateKey(element.dataset.i18nPlaceholder);
+      if (element.placeholder !== translated) {
+        element.placeholder = translated;
+      }
     }
 
     translateAttribute(element, 'placeholder', allowRefresh);
@@ -438,35 +450,51 @@
       select.value = selected;
     });
 
+    runWithoutObserver(() => translateTree(document.body, false));
+  }
+
+  function getObserverOptions() {
+    return {
+      attributes: true,
+      attributeFilter: ['placeholder', 'title', 'aria-label'],
+      childList: true,
+      subtree: true
+    };
+  }
+
+  function observeBody() {
+    if (observer && document.body) {
+      observer.observe(document.body, getObserverOptions());
+    }
+  }
+
+  function runWithoutObserver(callback) {
+    if (observer) {
+      observer.disconnect();
+    }
     isApplying = true;
-    translateTree(document.body, false);
-    isApplying = false;
+    try {
+      callback();
+    } finally {
+      isApplying = false;
+      observeBody();
+    }
   }
 
   function startObserver() {
     if (observer || !document.body) return;
     observer = new MutationObserver((mutations) => {
       if (isApplying) return;
-      isApplying = true;
-      mutations.forEach((mutation) => {
-        if (mutation.type === 'characterData') {
-          translateTextNode(mutation.target, true);
-          return;
-        }
-        mutation.addedNodes.forEach((node) => translateTree(node, true));
-        if (mutation.type === 'attributes') {
-          translateTree(mutation.target, true);
-        }
+      runWithoutObserver(() => {
+        mutations.forEach((mutation) => {
+          mutation.addedNodes.forEach((node) => translateTree(node, true));
+          if (mutation.type === 'attributes') {
+            translateTree(mutation.target, true);
+          }
+        });
       });
-      isApplying = false;
     });
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ['placeholder', 'title', 'aria-label', 'value'],
-      characterData: true,
-      childList: true,
-      subtree: true
-    });
+    observeBody();
   }
 
   function start() {
