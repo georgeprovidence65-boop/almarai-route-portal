@@ -762,6 +762,17 @@
             </div>
           </form>
 
+          <div class="bulk-import">
+            <h3>Bulk Import Products</h3>
+            <textarea id="bulkProductsCsv" placeholder="Paste CSV here: product_code,name,category,price,stock_quantity,notes"></textarea>
+            <label class="check-row" for="bulk_products_update_existing">
+              <input id="bulk_products_update_existing" type="checkbox">
+              Update existing product codes if they are already in the product list.
+            </label>
+            <button type="button" onclick="importBulkProducts()">Import Products</button>
+            <div class="status" id="bulkProductStatus">Paste product CSV from the photos, then import after manager review.</div>
+          </div>
+
           <div class="table-wrap">
             <table>
               <thead>
@@ -1084,6 +1095,27 @@
       }).filter((item) => item.customer_code && item.name);
     }
 
+    function csvToProductObjects(text) {
+      const rows = parseCsvText(text);
+      if (rows.length < 2) return [];
+
+      const headers = rows[0].map(normalizeBulkHeader);
+      return rows.slice(1).map((row) => {
+        const item = {};
+        headers.forEach((header, index) => {
+          item[header] = row[index] || '';
+        });
+
+        item.product_code = item.product_code || item.code || '';
+        item.name = item.name || item.description || item.product_name || '';
+        item.category = item.category || '';
+        item.price = item.price || 0;
+        item.stock_quantity = item.stock_quantity || 0;
+        item.notes = item.notes || '';
+        return item;
+      }).filter((item) => item.product_code || item.name);
+    }
+
     function updateSummary() {
       document.getElementById('productCount').textContent = products.length;
       document.getElementById('orderCount').textContent = orders.length;
@@ -1251,7 +1283,10 @@
             <td>${location}</td>
             <td class="wrap">${escapeHtml(customer.notes)}</td>
             <td><button class="secondary" type="button" onclick="openCustomerQr('${escapeHtml(customer.customer_code)}', '${escapeHtml(customer.name)}')">QR</button></td>
-            <td><button class="danger" type="button" onclick="deleteCustomer(${customer.id})">Delete</button></td>
+            <td>
+              <button type="button" onclick="setCustomerLocation(${customer.id})">Set Location</button>
+              <button class="danger" type="button" onclick="deleteCustomer(${customer.id})">Delete</button>
+            </td>
           </tr>
         `;
       }).join('');
@@ -1499,6 +1534,88 @@
             customers: customersToImport,
             route_number: routeNumber,
             area,
+            update_existing: updateExisting
+          })
+        });
+
+        status.textContent = result.message;
+        status.className = result.summary && result.summary.errors.length ? 'status warning' : 'status';
+        await loadAll();
+      } catch (error) {
+        status.textContent = error.message;
+        status.className = 'status error';
+        setStatus(error.message, 'error');
+      }
+    }
+
+    async function setCustomerLocation(id) {
+      const customer = customers.find((item) => item.id === id);
+      if (!customer) return;
+
+      const link = prompt('Paste Google Maps link. Leave blank and press OK to use this device GPS.', customer.location_link || '');
+      if (link === null) return;
+
+      if (link.trim()) {
+        try {
+          await api(`/admin/customers/${id}/location`, {
+            method: 'PATCH',
+            body: JSON.stringify({ location_link: link.trim() })
+          });
+          await loadAll();
+        } catch (error) {
+          setStatus(error.message, 'error');
+        }
+        return;
+      }
+
+      if (!navigator.geolocation) {
+        setStatus('This browser cannot read GPS. Paste a Google Maps link instead.', 'error');
+        return;
+      }
+
+      setStatus('Reading device GPS...');
+      navigator.geolocation.getCurrentPosition(async (position) => {
+        try {
+          await api(`/admin/customers/${id}/location`, {
+            method: 'PATCH',
+            body: JSON.stringify({
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude
+            })
+          });
+          await loadAll();
+        } catch (error) {
+          setStatus(error.message, 'error');
+        }
+      }, (error) => {
+        setStatus(`GPS failed: ${error.message}`, 'error');
+      }, {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 10000
+      });
+    }
+
+    async function importBulkProducts() {
+      const status = document.getElementById('bulkProductStatus');
+      const productsToImport = csvToProductObjects(document.getElementById('bulkProductsCsv').value);
+      const updateExisting = document.getElementById('bulk_products_update_existing').checked;
+
+      if (productsToImport.length === 0) {
+        status.textContent = 'No valid product rows found. Keep the header row and product_code/name columns.';
+        status.className = 'status error';
+        return;
+      }
+
+      if (!confirm(`Import ${productsToImport.length} products?`)) return;
+
+      try {
+        status.textContent = 'Importing products...';
+        status.className = 'status';
+        const result = await api('/admin/products/bulk', {
+          method: 'POST',
+          body: JSON.stringify({
+            products: productsToImport,
             update_existing: updateExisting
           })
         });

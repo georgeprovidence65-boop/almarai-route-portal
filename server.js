@@ -769,6 +769,67 @@ app.patch('/customers/by-code/:customerCode/location', authenticateToken, async 
   }
 });
 
+app.patch('/admin/customers/:id/location', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const latitude = req.body.latitude === undefined || req.body.latitude === '' ? null : toCoordinate(req.body.latitude);
+    const longitude = req.body.longitude === undefined || req.body.longitude === '' ? null : toCoordinate(req.body.longitude);
+    const locationLink = String(req.body.location_link || '').trim();
+
+    if ((latitude === null) !== (longitude === null)) {
+      return res.status(400).json({ message: 'Both latitude and longitude are required when saving GPS' });
+    }
+
+    if (latitude === null && !locationLink) {
+      return res.status(400).json({ message: 'GPS coordinates or a Google Maps link is required' });
+    }
+
+    const customerResult = await pool.query(
+      'SELECT id, customer_code, name, route_number, location_link, notes FROM customers WHERE id = $1',
+      [id]
+    );
+
+    if (customerResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Customer not found' });
+    }
+
+    const customer = customerResult.rows[0];
+    const role = req.user.role || '';
+    const canUpdateAny = ['manager', 'admin'].includes(role);
+    const isRouteSalesman = role === 'salesman'
+      && (!req.user.route_number || String(req.user.route_number) === String(customer.route_number));
+
+    if (!canUpdateAny && !isRouteSalesman) {
+      return res.status(403).json({ message: 'You can only save locations for customers on your route' });
+    }
+
+    const finalLink = locationLink || `https://www.google.com/maps?q=${latitude},${longitude}`;
+    const updateNote = `Location saved by ${role || 'staff'} on ${new Date().toISOString().slice(0, 10)}.`;
+    const result = await pool.query(
+      `UPDATE customers
+       SET latitude = COALESCE($1, latitude),
+           longitude = COALESCE($2, longitude),
+           location_link = $3,
+           notes = CASE
+             WHEN COALESCE(notes, '') = '' THEN $4
+             WHEN notes LIKE '%' || $4 || '%' THEN notes
+             ELSE notes || E'\n' || $4
+           END
+       WHERE id = $5
+       RETURNING *`,
+      [latitude, longitude, finalLink, updateNote, id]
+    );
+
+    res.json({
+      message: 'Customer location saved',
+      customer: result.rows[0]
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Failed to save customer location' });
+  }
+});
+
 app.get('/customer/proximity-alerts', authenticateToken, async (req, res) => {
   try {
     const customerCode = String(req.query.customerCode || '').trim();
@@ -1297,6 +1358,101 @@ app.post('/admin/products', async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Failed to create product' });
+  }
+});
+
+app.post('/admin/products/bulk', authenticateToken, requireManager, async (req, res) => {
+  try {
+    const inputProducts = Array.isArray(req.body.products) ? req.body.products : [];
+    const updateExisting = req.body.update_existing === true;
+
+    if (inputProducts.length === 0) {
+      return res.status(400).json({ message: 'No products were provided for import' });
+    }
+
+    if (inputProducts.length > 500) {
+      return res.status(400).json({ message: 'Import limit is 500 products at a time' });
+    }
+
+    const summary = {
+      received: inputProducts.length,
+      created: 0,
+      updated: 0,
+      skipped: 0,
+      invalid: 0,
+      errors: []
+    };
+
+    for (const item of inputProducts) {
+      const productCode = String(item.product_code || item.code || '').trim();
+      const rawName = String(item.name || item.description || item.product_name || '').trim();
+      const category = String(item.category || '').trim();
+
+      if (!rawName && !productCode) {
+        summary.invalid++;
+        continue;
+      }
+
+      const name = productCode
+        ? `${productCode} - ${rawName || 'Product'}`
+        : rawName;
+      const descriptionParts = [
+        productCode ? `Code: ${productCode}` : '',
+        category ? `Category: ${category}` : '',
+        item.notes ? String(item.notes).trim() : 'Imported from product list photo; verify full name and price.'
+      ].filter(Boolean);
+      const description = String(item.full_description || descriptionParts.join(' | ')).trim();
+      const price = Number(item.price || 0);
+      const stockQuantity = Number(item.stock_quantity || 0);
+      const imageUrl = String(item.image_url || '').trim();
+
+      try {
+        const existing = await pool.query(
+          `SELECT id FROM products
+           WHERE name = $1
+              OR ($2 <> '' AND name LIKE $3)
+           LIMIT 1`,
+          [name, productCode, `${productCode} - %`]
+        );
+
+        if (existing.rows[0]) {
+          if (!updateExisting) {
+            summary.skipped++;
+            continue;
+          }
+
+          await pool.query(
+            `UPDATE products
+             SET name = $1,
+                 description = $2,
+                 price = $3,
+                 stock_quantity = $4,
+                 image_url = $5
+             WHERE id = $6`,
+            [name, description, price, stockQuantity, imageUrl, existing.rows[0].id]
+          );
+          summary.updated++;
+          continue;
+        }
+
+        await pool.query(
+          `INSERT INTO products (name, description, price, stock_quantity, image_url)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [name, description, price, stockQuantity, imageUrl]
+        );
+        summary.created++;
+      } catch (error) {
+        summary.errors.push({ product_code: productCode, name: rawName, message: error.message });
+      }
+    }
+
+    res.status(201).json({
+      message: `Product import complete: ${summary.created} created, ${summary.updated} updated, ${summary.skipped} skipped, ${summary.invalid} invalid.`,
+      summary
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Failed to import products' });
   }
 });
 
