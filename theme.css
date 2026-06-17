@@ -429,6 +429,206 @@ tbody tr:nth-child(even) {
   border-radius: 999px !important;
 }
 
+.salesman-dashboard {
+  display: grid;
+  gap: 16px;
+}
+
+.salesman-hero {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1.25fr) minmax(360px, 0.75fr);
+}
+
+.route-hero-card,
+.hero-action-card {
+  background: #fff;
+  border: 1px solid var(--brand-line);
+  border-radius: 14px;
+  box-shadow: 0 16px 34px rgba(9, 33, 63, 0.08);
+  overflow: hidden;
+}
+
+.route-hero-card {
+  align-items: center;
+  background:
+    linear-gradient(135deg, rgba(6, 45, 143, 0.98), rgba(7, 61, 186, 0.94) 58%, rgba(7, 136, 63, 0.94)),
+    #062d8f;
+  color: #fff;
+  display: flex;
+  justify-content: space-between;
+  min-height: 166px;
+  padding: 22px;
+}
+
+.route-hero-card h2 {
+  color: #fff;
+  font-size: clamp(34px, 5vw, 58px);
+  line-height: 0.95;
+  margin: 8px 0;
+}
+
+.route-hero-card p {
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.hero-eyebrow {
+  color: rgba(255, 255, 255, 0.72);
+  display: block;
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.hero-date {
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 12px;
+  display: grid;
+  gap: 5px;
+  min-width: 118px;
+  padding: 14px;
+  text-align: center;
+}
+
+.hero-date span {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.hero-date strong {
+  color: #fff;
+  font-size: 22px;
+}
+
+.hero-action-card {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.hero-action-card .hero-eyebrow {
+  color: var(--brand-green);
+}
+
+.hero-action-copy strong {
+  color: var(--brand-ink);
+  display: block;
+  font-size: 20px;
+  margin-top: 5px;
+}
+
+.hero-actions-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.hero-actions-grid button,
+.hero-actions-grid .button-link {
+  min-height: 50px;
+}
+
+.salesman-dashboard .route-workbar {
+  align-items: stretch !important;
+}
+
+.salesman-dashboard .route-workbar .toolbar-left {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: auto auto minmax(220px, 1fr) minmax(160px, 220px);
+}
+
+.salesman-dashboard .route-workbar .actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(130px, 1fr));
+}
+
+.salesman-dashboard .delivery-alert-bar {
+  border-left: 5px solid var(--brand-sky) !important;
+}
+
+.salesman-dashboard .route-summary {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.salesman-dashboard .metric {
+  display: grid;
+  gap: 8px;
+  min-height: 104px;
+}
+
+.salesman-dashboard .metric span {
+  font-size: 13px !important;
+}
+
+.salesman-dashboard .metric strong {
+  align-self: end;
+}
+
+.salesman-dashboard .layout {
+  align-items: start;
+  grid-template-columns: minmax(0, 1.35fr) minmax(340px, 0.65fr);
+}
+
+.salesman-dashboard .customer-card {
+  background: linear-gradient(90deg, #ffffff, #f7fbff) !important;
+}
+
+.salesman-dashboard .customer-card .card-head,
+.salesman-dashboard .request-card .card-head {
+  align-items: center;
+}
+
+.salesman-dashboard .card-actions button,
+.salesman-dashboard .card-actions .button-link {
+  min-height: 36px;
+}
+
+.guide-panel {
+  align-self: start;
+}
+
+.guide-panel summary {
+  background: linear-gradient(180deg, #ffffff, #f6f9fc);
+  border-bottom: 1px solid var(--brand-line);
+  color: var(--brand-ink);
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: 850;
+  list-style: none;
+  padding: 14px;
+}
+
+.guide-panel summary::-webkit-details-marker {
+  display: none;
+}
+
+.guide-panel summary::after {
+  color: var(--brand-blue);
+  content: "Open guide";
+  float: right;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.guide-panel[open] summary::after {
+  content: "Close";
+}
+
+.salesman-dashboard .nearby-card {
+  border-radius: 12px !important;
+}
+
+.salesman-dashboard .map-zone {
+  min-height: 330px;
+}
+
 @media (max-width: 860px) {
   body {
     padding: 0 !important;
@@ -509,6 +709,41 @@ tbody tr:nth-child(even) {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 
+  .salesman-hero {
+    gap: 10px;
+    grid-template-columns: 1fr;
+  }
+
+  .route-hero-card {
+    align-items: flex-start;
+    border-radius: 16px;
+    min-height: 148px;
+    padding: 18px;
+  }
+
+  .route-hero-card h2 {
+    font-size: 38px;
+  }
+
+  .hero-date {
+    min-width: 96px;
+    padding: 10px;
+  }
+
+  .hero-actions-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .salesman-dashboard .route-workbar .toolbar-left,
+  .salesman-dashboard .route-workbar .actions {
+    grid-template-columns: 1fr !important;
+  }
+
+  .salesman-dashboard .guide-grid {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+  }
+
   .dashboard-app .metric {
     min-height: 92px;
     padding: 14px !important;
@@ -540,6 +775,14 @@ tbody tr:nth-child(even) {
   .dashboard-app .layout,
   .dashboard-app .grid {
     gap: 12px !important;
+  }
+
+  .salesman-dashboard .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .salesman-dashboard .map-zone {
+    min-height: 260px;
   }
 
   .dashboard-app .flow-steps,

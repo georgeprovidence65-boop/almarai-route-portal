@@ -569,7 +569,7 @@
       }
     }
   </style>
-  <link rel="stylesheet" href="/theme.css?v=4">
+  <link rel="stylesheet" href="/theme.css?v=5">
 </head>
 <body>
   <header data-language-target>
@@ -577,8 +577,35 @@
     <p>Route 950 customer visits, map links, customer types, and follow-up requests.</p>
   </header>
 
-  <main>
-    <section class="toolbar">
+  <main class="salesman-dashboard">
+    <section class="salesman-hero">
+      <article class="route-hero-card">
+        <div>
+          <span class="hero-eyebrow">Current Route</span>
+          <h2 id="heroRoute">Route 950</h2>
+          <p id="heroGreeting">Good morning. Your route is ready.</p>
+        </div>
+        <div class="hero-date">
+          <span>Today</span>
+          <strong id="heroToday">--</strong>
+        </div>
+      </article>
+
+      <article class="hero-action-card">
+        <div class="hero-action-copy">
+          <span class="hero-eyebrow">Quick Actions</span>
+          <strong>Work faster on route</strong>
+        </div>
+        <div class="hero-actions-grid">
+          <button type="button" onclick="startLocationSharing()">Map View</button>
+          <button type="button" onclick="createStockRequest('Request Help')">Request Support</button>
+          <button type="button" onclick="document.getElementById('transferForm').scrollIntoView({ behavior: 'smooth', block: 'start' })">Stock Transfer</button>
+          <a class="button-link light" href="#customersList">Customers</a>
+        </div>
+      </article>
+    </section>
+
+    <section class="toolbar route-workbar">
       <div class="toolbar-left">
         <strong>Backend:</strong>
         <span id="apiStatus" class="status">Checking...</span>
@@ -595,14 +622,14 @@
         <button type="button" onclick="loadAll()">Refresh</button>
       </div>
     </section>
-    <section class="toolbar">
+    <section class="toolbar delivery-alert-bar">
       <div>
         <strong>Delivery Alerts:</strong>
         <span id="locationStatus" class="status">Location sharing is off.</span>
       </div>
     </section>
 
-    <section class="summary">
+    <section class="summary route-summary">
       <div class="metric">
         <span>Route Customers</span>
         <strong id="customerCount">0</strong>
@@ -625,9 +652,9 @@
       </div>
     </section>
 
-    <section class="duty-grid">
-      <article class="panel">
-        <h2>Getting There - How To Access</h2>
+    <section class="duty-grid guide-grid">
+      <details class="panel guide-panel">
+        <summary>Getting There - How To Access</summary>
         <div class="panel-body">
           <div class="flow-steps">
             <div class="flow-step">
@@ -652,7 +679,7 @@
             </div>
           </div>
         </div>
-      </article>
+      </details>
 
       <article class="panel">
         <h2>Nearby Salesmen - 600m Radius</h2>
@@ -814,7 +841,7 @@
     </section>
   </main>
 
-  <script src="/theme.js?v=4"></script>
+  <script src="/theme.js?v=5"></script>
   <script src="/i18n.js"></script>
   <script>
     const API = window.location.protocol === 'file:' ? 'http://localhost:5000' : window.location.origin;
@@ -1012,6 +1039,23 @@
       const visitedCount = routeCustomers.filter((customer) => visited[customer.id]).length;
       const sentCount = transfers.filter((transfer) => transfer.request_type !== 'Breakdown').length;
       const receivedCount = transfers.filter((transfer) => transfer.status === 'Received' || transfer.status === 'Transfer Complete').length;
+      const heroRoute = document.getElementById('heroRoute');
+      const heroGreeting = document.getElementById('heroGreeting');
+      const heroToday = document.getElementById('heroToday');
+
+      if (heroRoute) {
+        heroRoute.textContent = `Route ${currentRoute || '950'}`;
+      }
+
+      if (heroGreeting) {
+        const name = currentProfile?.full_name ? `, ${currentProfile.full_name.split(' ')[0]}` : '';
+        const area = currentProfile?.area ? ` - ${currentProfile.area}` : '';
+        heroGreeting.textContent = `Good morning${name}${area}`;
+      }
+
+      if (heroToday) {
+        heroToday.textContent = new Date().toLocaleDateString(undefined, { day: '2-digit', month: 'short' });
+      }
 
       document.getElementById('customerCount').textContent = routeCustomers.length;
       document.getElementById('visitedCount').textContent = visitedCount;
@@ -1178,7 +1222,7 @@
         unit: 'cartons',
         notes: type
       });
-      alert(`${type} sent to ${firstAvailable.name}.`);
+      alert(`${type} sent to ${firstAvailable.full_name || 'nearby salesman'}.`);
     }
 
     async function createDepotSupport() {
@@ -1217,7 +1261,7 @@
         notes: 'Breakdown assistance requested. Location shared by salesman.'
       });
       document.getElementById('breakdownStatus').textContent =
-        `${nearest.name} is nearest at ${nearest.distance}m and can respond.`;
+        `${nearest.full_name || 'Nearest salesman'} is nearest at ${Math.round(Number(nearest.distance_meters || 0))}m and can respond.`;
     }
 
     function renderCustomers() {
