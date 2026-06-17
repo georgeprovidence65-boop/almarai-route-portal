@@ -29,6 +29,68 @@
     return frame;
   }
 
+  function getPageTitle() {
+    const title = document.querySelector('header h1')?.textContent?.trim();
+    return title || 'Almarai Route Portal';
+  }
+
+  function createLogoutButton() {
+    const button = document.createElement('button');
+    button.className = 'logout-button';
+    button.type = 'button';
+    button.setAttribute('data-i18n', 'logout');
+    button.textContent = 'Logout';
+    button.addEventListener('click', logout);
+    return button;
+  }
+
+  function createRolePill() {
+    const roleLabel = getRoleLabel();
+    if (!roleLabel) return null;
+    const role = document.createElement('span');
+    role.className = 'role-pill';
+    role.textContent = roleLabel;
+    return role;
+  }
+
+  function enhanceTopbar() {
+    const token = localStorage.getItem('almaraiToken');
+    if (!token || document.querySelector('.app-topbar')) return;
+    document.body.classList.add('dashboard-app');
+
+    const topbar = document.createElement('div');
+    topbar.className = 'app-topbar';
+    topbar.setAttribute('data-language-target', '');
+
+    const left = document.createElement('div');
+    left.className = 'app-topbar-left';
+    left.appendChild(createLogo());
+
+    const titleWrap = document.createElement('div');
+    titleWrap.className = 'app-title-wrap';
+
+    const title = document.createElement('strong');
+    title.textContent = getPageTitle();
+
+    const subtitle = document.createElement('span');
+    subtitle.textContent = 'Route operations portal';
+
+    titleWrap.appendChild(title);
+    titleWrap.appendChild(subtitle);
+    left.appendChild(titleWrap);
+
+    const right = document.createElement('div');
+    right.className = 'app-topbar-right';
+
+    const role = createRolePill();
+    if (role) right.appendChild(role);
+    right.appendChild(createLogoutButton());
+
+    topbar.appendChild(left);
+    topbar.appendChild(right);
+    document.body.insertBefore(topbar, document.body.firstChild);
+  }
+
   function enhanceHeader() {
     const header = document.querySelector('header[data-language-target], header');
     if (!header || header.dataset.themeReady === 'true') return;
@@ -50,26 +112,16 @@
     brand.appendChild(copy);
     header.insertBefore(brand, header.firstChild);
 
-    const token = localStorage.getItem('almaraiToken');
     const actions = document.createElement('div');
     actions.className = 'portal-actions';
 
-    const roleLabel = getRoleLabel();
-    if (roleLabel) {
-      const role = document.createElement('span');
-      role.className = 'role-pill';
-      role.textContent = roleLabel;
+    const role = createRolePill();
+    if (role) {
       actions.appendChild(role);
     }
 
-    if (token) {
-      const button = document.createElement('button');
-      button.className = 'logout-button';
-      button.type = 'button';
-      button.setAttribute('data-i18n', 'logout');
-      button.textContent = 'Logout';
-      button.addEventListener('click', logout);
-      actions.appendChild(button);
+    if (localStorage.getItem('almaraiToken')) {
+      actions.appendChild(createLogoutButton());
     }
 
     if (actions.children.length > 0) {
@@ -87,12 +139,14 @@
   }
 
   function start() {
+    enhanceTopbar();
     enhanceHeader();
     enhanceQrCard();
   }
 
   window.AlmaraiTheme = {
     logout,
+    enhanceTopbar,
     enhanceHeader,
     enhanceQrCard
   };

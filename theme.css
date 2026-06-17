@@ -29,6 +29,85 @@ body::before {
   display: none !important;
 }
 
+.app-topbar {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.96);
+  border-bottom: 1px solid var(--brand-line);
+  box-shadow: 0 12px 30px rgba(9, 33, 63, 0.08);
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  min-height: 76px;
+  padding: 10px max(18px, calc((100vw - 1480px) / 2 + 18px));
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.app-topbar-left,
+.app-topbar-right {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+}
+
+.app-topbar-left {
+  flex: 1 1 auto;
+}
+
+.app-title-wrap {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.app-title-wrap strong {
+  color: var(--brand-blue);
+  font-size: 18px;
+  font-weight: 850;
+  line-height: 1.1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-title-wrap span {
+  color: var(--brand-muted);
+  font-size: 12px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-topbar .brand-logo-frame {
+  border: 1px solid #e2edf4;
+  box-shadow: none;
+  height: 48px;
+  padding: 5px 8px;
+  width: 108px;
+}
+
+.app-topbar .language-switcher {
+  margin: 0 !important;
+}
+
+.app-topbar .language-switcher label {
+  color: var(--brand-muted) !important;
+}
+
+.app-topbar .language-switcher select {
+  background: #f7fbff !important;
+  border: 1px solid #cbd9e6 !important;
+  min-height: 38px;
+}
+
+.dashboard-app main {
+  max-width: 1480px !important;
+  width: min(100% - 32px, 1480px) !important;
+}
+
 .brand-shell {
   align-items: center !important;
   background:
@@ -140,7 +219,7 @@ body::before {
 }
 
 .logout-button::before {
-  content: "↗";
+  content: ">";
   font-size: 14px;
   line-height: 1;
   transform: rotate(180deg);
@@ -300,6 +379,41 @@ tbody tr:nth-child(even) {
 @media (max-width: 860px) {
   body {
     padding: 0 !important;
+  }
+
+  .app-topbar {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 0;
+    padding: 10px 12px;
+  }
+
+  .app-topbar-left,
+  .app-topbar-right {
+    width: 100%;
+  }
+
+  .app-topbar-right {
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+
+  .app-topbar .brand-logo-frame {
+    height: 44px;
+    width: 96px;
+  }
+
+  .app-title-wrap strong {
+    font-size: 16px;
+  }
+
+  .app-topbar .language-switcher {
+    flex: 1 1 170px;
+  }
+
+  .dashboard-app main {
+    width: min(100% - 18px, 720px) !important;
   }
 
   .brand-shell {
