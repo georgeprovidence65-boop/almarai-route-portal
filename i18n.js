@@ -29,7 +29,8 @@
     requestAccess: 'Request Access',
     fullName: 'Full Name',
     choosePassword: 'Choose Password/PIN',
-    submitRequest: 'Submit Request'
+    submitRequest: 'Submit Request',
+    logout: 'Logout'
   };
 
   const phraseTranslations = {
@@ -65,6 +66,7 @@
     'Customer ID': p('رقم العميل', 'ग्राहक ID', 'පාරිභෝගික ID', 'গ্রাহক ID', 'کسٹمر ID'),
     'Notes': p('ملاحظات', 'नोट्स', 'සටහන්', 'নোট', 'نوٹس'),
     'Submit Request': p('إرسال الطلب', 'अनुरोध भेजें', 'ඉල්ලීම යවන්න', 'অনুরোধ পাঠান', 'درخواست بھیجیں'),
+    'Logout': p('تسجيل الخروج', 'लॉग आउट', 'ඉවත් වන්න', 'লগ আউট', 'لاگ آؤٹ'),
     'Submitting request...': p('جاري إرسال الطلب...', 'अनुरोध भेज रहे हैं...', 'ඉල්ලීම යවමින්...', 'অনুরোধ পাঠানো হচ্ছে...', 'درخواست بھیجی جا رہی ہے...'),
     'Access request submitted. Please wait for manager approval.': p(
       'تم إرسال طلب الدخول. يرجى انتظار موافقة المدير.',

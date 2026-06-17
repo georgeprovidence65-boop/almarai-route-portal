@@ -167,6 +167,18 @@ app.get('/i18n.js', (req, res) => {
   res.sendFile(`${__dirname}/i18n.js`);
 });
 
+app.get('/theme.css', (req, res) => {
+  res.sendFile(`${__dirname}/theme.css`);
+});
+
+app.get('/theme.js', (req, res) => {
+  res.sendFile(`${__dirname}/theme.js`);
+});
+
+app.get('/almarai-logo.png', (req, res) => {
+  res.sendFile(`${__dirname}/almarai-logo.png`);
+});
+
 app.get('/customer-page', (req, res) => {
   res.sendFile(`${__dirname}/customer.html`);
 });
