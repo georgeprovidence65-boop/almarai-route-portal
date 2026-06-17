@@ -443,6 +443,38 @@
       margin-bottom: 6px;
     }
 
+    .truck-stock-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .truck-stock-card {
+      align-items: center;
+      background: linear-gradient(90deg, #f7fffa, #ffffff);
+      border: 1px solid #d7e8dc;
+      border-radius: 8px;
+      display: grid;
+      gap: 10px;
+      grid-template-columns: minmax(0, 1fr) auto;
+      padding: 12px;
+    }
+
+    .truck-stock-card strong {
+      display: block;
+      font-size: 15px;
+      margin-bottom: 4px;
+    }
+
+    .stock-count {
+      background: #eaf7ef;
+      border-radius: 999px;
+      color: #08783a;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 7px 10px;
+      white-space: nowrap;
+    }
+
     .positive {
       color: #08783a;
       font-weight: 700;
@@ -464,6 +496,10 @@
       }
 
       .transfer-form {
+        grid-template-columns: 1fr;
+      }
+
+      .truck-stock-card {
         grid-template-columns: 1fr;
       }
 
@@ -778,22 +814,10 @@
       </article>
 
       <article class="panel">
-        <h2>Stock Updated Automatically</h2>
+        <h2>Day Truck Stock</h2>
         <div class="panel-body">
-          <div class="stock-grid">
-            <div class="stock-card">
-              <strong>Route 952</strong>
-              Before: 35 cartons<br>
-              Transferred: <span class="negative">-20</span><br>
-              After: 15 cartons
-            </div>
-            <div class="stock-card">
-              <strong>Route 950</strong>
-              Before: 5 cartons<br>
-              Received: <span class="positive">+20</span><br>
-              After: 25 cartons
-            </div>
-          </div>
+          <div class="details">Products shown here come from today's route stock for this truck.</div>
+          <div id="routeStockProducts" class="truck-stock-list"></div>
         </div>
       </article>
     </section>
@@ -1236,21 +1260,66 @@
     }
 
     function renderRouteStock() {
-      const target = document.getElementById('routeStockSummary');
+      const summaryTarget = document.getElementById('routeStockSummary');
+      const productTarget = document.getElementById('routeStockProducts');
 
       if (routeStock.length === 0) {
-        target.textContent = 'No stock recorded yet.';
+        summaryTarget.textContent = 'No stock recorded yet.';
+        if (productTarget) {
+          productTarget.innerHTML = '<div class="empty">No truck stock has been recorded for this route today.</div>';
+        }
         return;
       }
 
-      target.innerHTML = routeStock.map((stock) => `
-        ${escapeHtml(stock.product_name)}: opening ${escapeHtml(stock.opening_quantity)}, depot ${escapeHtml(stock.received_quantity)}, in ${escapeHtml(stock.transferred_in_quantity)}, out ${escapeHtml(stock.transferred_out_quantity)}, delivered ${escapeHtml(stock.delivered_quantity)}, returns ${escapeHtml(stock.returned_quantity)}, closing ${escapeHtml(stock.closing_quantity)}
+      summaryTarget.innerHTML = routeStock.map((stock) => `
+        ${escapeHtml(stock.product_name || `Product #${stock.product_id}`)}: opening ${escapeHtml(stock.opening_quantity)}, depot ${escapeHtml(stock.received_quantity)}, in ${escapeHtml(stock.transferred_in_quantity)}, out ${escapeHtml(stock.transferred_out_quantity)}, delivered ${escapeHtml(stock.delivered_quantity)}, returns ${escapeHtml(stock.returned_quantity)}, closing ${escapeHtml(stock.closing_quantity)}
       `).join('<br>');
+
+      if (productTarget) {
+        productTarget.innerHTML = routeStock.map((stock) => {
+          const productName = stock.product_name || `Product #${stock.product_id}`;
+          const closing = Number(stock.closing_quantity || 0);
+          const closingClass = closing > 0 ? 'stock-count' : 'stock-count warning';
+
+          return `
+            <article class="truck-stock-card">
+              <div>
+                <strong>${escapeHtml(productName)}</strong>
+                <span class="details">
+                  Opening ${escapeHtml(stock.opening_quantity)} | Depot ${escapeHtml(stock.received_quantity)} |
+                  In ${escapeHtml(stock.transferred_in_quantity)} | Out ${escapeHtml(stock.transferred_out_quantity)} |
+                  Delivered ${escapeHtml(stock.delivered_quantity)} | Returns ${escapeHtml(stock.returned_quantity)}
+                </span>
+              </div>
+              <span class="${closingClass}">Closing ${escapeHtml(stock.closing_quantity)}</span>
+            </article>
+          `;
+        }).join('');
+      }
     }
 
     function renderProductOptions() {
       const transferProduct = document.getElementById('transferProduct');
       if (!transferProduct) return;
+
+      const stockProducts = routeStock
+        .filter((stock) => stock.product_name)
+        .map((stock) => ({
+          name: stock.product_name,
+          closing: Number(stock.closing_quantity || 0)
+        }));
+
+      if (stockProducts.length > 0) {
+        const currentValue = transferProduct.value;
+        transferProduct.innerHTML = stockProducts.map((product) => `
+          <option value="${escapeHtml(product.name)}">${escapeHtml(product.name)} - truck closing ${escapeHtml(product.closing)}</option>
+        `).join('');
+
+        if (currentValue && stockProducts.some((product) => product.name === currentValue)) {
+          transferProduct.value = currentValue;
+        }
+        return;
+      }
 
       if (products.length === 0) {
         transferProduct.innerHTML = ['Milk', 'Juice', 'Yoghurt', 'Cheese'].map((name) => `

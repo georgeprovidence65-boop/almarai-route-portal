@@ -171,6 +171,85 @@
       line-height: 1.4;
     }
 
+    .product-footer {
+      align-items: end;
+      display: grid;
+      gap: 8px;
+      grid-template-columns: 1fr auto;
+      margin-top: 12px;
+    }
+
+    .product-price {
+      color: var(--green-dark);
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      margin-top: 8px;
+    }
+
+    .quantity-field {
+      display: grid;
+      gap: 4px;
+      min-width: 82px;
+    }
+
+    .quantity-field label {
+      margin: 0;
+    }
+
+    .quantity-field input {
+      min-width: 0;
+      text-align: center;
+    }
+
+    .cart-summary {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcff;
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
+      padding: 12px;
+    }
+
+    .cart-line {
+      align-items: center;
+      border-bottom: 1px solid #e6edf5;
+      display: grid;
+      gap: 8px;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      padding-bottom: 8px;
+    }
+
+    .cart-line:last-of-type {
+      border-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .cart-line strong {
+      display: block;
+      font-size: 14px;
+    }
+
+    .cart-line span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .cart-total {
+      align-items: center;
+      display: flex;
+      gap: 10px;
+      justify-content: space-between;
+      font-weight: 700;
+    }
+
+    .order-status {
+      color: var(--muted);
+      font-size: 13px;
+      min-height: 18px;
+    }
+
     label {
       display: block;
       color: #2d4356;
@@ -285,6 +364,10 @@
       .two {
         grid-template-columns: 1fr;
       }
+
+      .cart-line {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
   <style>
@@ -381,6 +464,7 @@
         <div id="backendStatus" class="status"><strong>Backend:</strong> Checking...</div>
         <div class="categories" id="categories"></div>
         <div class="product-grid" id="products"></div>
+        <div id="cartSummary" class="cart-summary"></div>
       </div>
     </section>
 
@@ -461,6 +545,7 @@
     };
     const categoryNames = ['All', 'Dairy', 'Juice', 'Bakery', 'Other'];
     let products = [];
+    let cart = {};
     let activeCategory = 'All';
     let selectedCustomer = null;
     let proximityTimer = null;
@@ -545,8 +630,95 @@
         <article class="product">
           <h3>${escapeHtml(product.name)}</h3>
           <p>${escapeHtml(product.description || 'Available for route supply. Ask the team for the right quantity.')}</p>
+          <span class="product-price">${Number(product.price || 0).toFixed(2)} SAR</span>
+          <div class="product-footer">
+            <div class="quantity-field">
+              <label for="qty-${product.id}">Qty</label>
+              <input id="qty-${product.id}" type="number" min="1" value="${escapeHtml(cart[product.id]?.quantity || 1)}" inputmode="numeric">
+            </div>
+            <button type="button" onclick="addToCart(${product.id})">Add</button>
+          </div>
         </article>
       `).join('');
+    }
+
+    function renderCart() {
+      const target = document.getElementById('cartSummary');
+      const items = Object.values(cart);
+
+      if (items.length === 0) {
+        target.innerHTML = `
+          <div class="empty">Choose products above and add the quantity you want.</div>
+          <div class="order-status" id="orderStatus"></div>
+        `;
+        return;
+      }
+
+      const total = items.reduce((sum, item) => sum + Number(item.product.price || 0) * Number(item.quantity || 0), 0);
+
+      target.innerHTML = `
+        ${items.map((item) => `
+          <div class="cart-line">
+            <div>
+              <strong>${escapeHtml(item.product.name)}</strong>
+              <span>${Number(item.product.price || 0).toFixed(2)} SAR each</span>
+            </div>
+            <span>Qty ${escapeHtml(item.quantity)}</span>
+            <button type="button" class="category-button" onclick="removeFromCart(${item.product.id})">Remove</button>
+          </div>
+        `).join('')}
+        <div class="cart-total">
+          <span>Total</span>
+          <span>${total.toFixed(2)} SAR</span>
+        </div>
+        <button type="button" onclick="submitOrder()">Submit Order</button>
+        <div class="order-status" id="orderStatus"></div>
+      `;
+    }
+
+    function addToCart(productId) {
+      const product = products.find((item) => Number(item.id) === Number(productId));
+      if (!product) return;
+
+      const quantityInput = document.getElementById(`qty-${productId}`);
+      const quantity = Math.max(1, Number(quantityInput?.value || 1));
+
+      cart[productId] = { product, quantity };
+      renderCart();
+    }
+
+    function removeFromCart(productId) {
+      delete cart[productId];
+      renderCart();
+    }
+
+    async function submitOrder() {
+      const items = Object.values(cart).map((item) => ({
+        product_id: item.product.id,
+        quantity: item.quantity
+      }));
+      const status = document.getElementById('orderStatus');
+
+      if (items.length === 0) {
+        status.textContent = 'Add at least one product before submitting.';
+        return;
+      }
+
+      status.textContent = 'Sending order...';
+
+      try {
+        const result = await api('/orders-with-items', {
+          method: 'POST',
+          body: JSON.stringify({ items })
+        });
+
+        cart = {};
+        renderProducts();
+        renderCart();
+        document.getElementById('orderStatus').textContent = `Order #${result.order.id} sent to the route team.`;
+      } catch (error) {
+        status.textContent = `Could not send order: ${error.message}`;
+      }
     }
 
     function setCategory(category) {
@@ -565,11 +737,13 @@
         status.innerHTML = '<strong>Backend:</strong> Connected';
         renderCategories();
         renderProducts();
+        renderCart();
       } catch (error) {
         status.className = 'status error';
         status.innerHTML = `<strong>Backend:</strong> ${escapeHtml(error.message)}`;
         renderCategories();
         renderProducts();
+        renderCart();
       }
     }
 
