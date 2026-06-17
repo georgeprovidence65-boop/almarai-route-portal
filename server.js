@@ -168,14 +168,17 @@ app.get('/i18n.js', (req, res) => {
 });
 
 app.get('/theme.css', (req, res) => {
+  res.set('Cache-Control', 'no-store');
   res.sendFile(`${__dirname}/theme.css`);
 });
 
 app.get('/theme.js', (req, res) => {
+  res.set('Cache-Control', 'no-store');
   res.sendFile(`${__dirname}/theme.js`);
 });
 
 app.get('/almarai-logo.png', (req, res) => {
+  res.set('Cache-Control', 'no-store');
   res.sendFile(`${__dirname}/almarai-logo.png`);
 });
 

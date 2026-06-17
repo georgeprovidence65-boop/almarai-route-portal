@@ -60,7 +60,6 @@
 
     const topbar = document.createElement('div');
     topbar.className = 'app-topbar';
-    topbar.setAttribute('data-language-target', '');
 
     const left = document.createElement('div');
     left.className = 'app-topbar-left';
@@ -81,14 +80,82 @@
 
     const right = document.createElement('div');
     right.className = 'app-topbar-right';
+    right.setAttribute('data-language-target', '');
 
     const role = createRolePill();
     if (role) right.appendChild(role);
+
+    const notice = document.createElement('span');
+    notice.className = 'notification-pill';
+    notice.textContent = '0';
+    right.appendChild(notice);
+
+    const avatar = document.createElement('span');
+    avatar.className = 'profile-avatar';
+    avatar.textContent = (getRoleLabel()[0] || 'U').toUpperCase();
+    right.appendChild(avatar);
+
     right.appendChild(createLogoutButton());
 
     topbar.appendChild(left);
     topbar.appendChild(right);
     document.body.insertBefore(topbar, document.body.firstChild);
+  }
+
+  function getBottomNavItems() {
+    const role = localStorage.getItem('almaraiRole');
+    if (role === 'customer') {
+      return [
+        ['Home', '/customer-page', 'H'],
+        ['Products', '/customer-page#products', 'P'],
+        ['Orders', '/customer-page#orders', 'O'],
+        ['More', '/customer-page#more', 'M']
+      ];
+    }
+
+    if (role === 'salesman') {
+      return [
+        ['Home', '/salesman-dashboard', 'H'],
+        ['Customers', '/salesman-dashboard#customersList', 'C'],
+        ['Transfers', '/salesman-dashboard#activeTransfers', 'T'],
+        ['More', '/salesman-dashboard#more', 'M']
+      ];
+    }
+
+    return [
+      ['Home', '/manager-portal', 'H'],
+      ['Users', '/manager-portal#userForm', 'U'],
+      ['Transfers', '/manager-portal#partnerForm', 'T'],
+      ['More', '/manager-portal#more', 'M']
+    ];
+  }
+
+  function enhanceBottomNav() {
+    if (!localStorage.getItem('almaraiToken') || document.querySelector('.app-bottom-nav')) return;
+
+    const nav = document.createElement('nav');
+    nav.className = 'app-bottom-nav';
+    nav.setAttribute('aria-label', 'Mobile navigation');
+
+    const path = window.location.pathname;
+    getBottomNavItems().forEach(([label, href, icon]) => {
+      const link = document.createElement('a');
+      link.href = href;
+      if (path && href.startsWith(path)) link.className = 'active';
+
+      const iconNode = document.createElement('span');
+      iconNode.className = 'nav-icon';
+      iconNode.textContent = icon;
+
+      const labelNode = document.createElement('span');
+      labelNode.textContent = label;
+
+      link.appendChild(iconNode);
+      link.appendChild(labelNode);
+      nav.appendChild(link);
+    });
+
+    document.body.appendChild(nav);
   }
 
   function enhanceHeader() {
@@ -140,6 +207,7 @@
 
   function start() {
     enhanceTopbar();
+    enhanceBottomNav();
     enhanceHeader();
     enhanceQrCard();
   }
@@ -147,6 +215,7 @@
   window.AlmaraiTheme = {
     logout,
     enhanceTopbar,
+    enhanceBottomNav,
     enhanceHeader,
     enhanceQrCard
   };
