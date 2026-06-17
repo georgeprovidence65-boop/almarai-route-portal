@@ -1434,6 +1434,113 @@ app.post('/admin/customers', async (req, res) => {
   }
 });
 
+app.post('/admin/customers/bulk', authenticateToken, requireManager, async (req, res) => {
+  try {
+    const inputCustomers = Array.isArray(req.body.customers) ? req.body.customers : [];
+    const routeNumber = String(req.body.route_number || '950').trim() || '950';
+    const area = String(req.body.area || 'Wadi Laban, Riyadh').trim() || 'Wadi Laban, Riyadh';
+    const updateExisting = req.body.update_existing !== false;
+
+    if (inputCustomers.length === 0) {
+      return res.status(400).json({ message: 'No customers were provided for import' });
+    }
+
+    if (inputCustomers.length > 500) {
+      return res.status(400).json({ message: 'Import limit is 500 customers at a time' });
+    }
+
+    const summary = {
+      received: inputCustomers.length,
+      created: 0,
+      updated: 0,
+      skipped: 0,
+      invalid: 0,
+      errors: []
+    };
+
+    for (const item of inputCustomers) {
+      const customerCode = String(item.customer_code || item.code || '').trim();
+      const name = String(item.name || item.customer_name || item.name_from_photo || '').trim();
+      const customerType = normalizeCustomerType(item.customer_type || item.type);
+      const contactPhone = String(item.contact_phone || item.phone || '').trim();
+      const locationLink = String(item.location_link || item.google_maps_link || item.map_link || '').trim();
+      const notes = String(item.notes || item.manager_action || '').trim();
+
+      if (!customerCode || !name) {
+        summary.invalid++;
+        continue;
+      }
+
+      try {
+        const existing = await pool.query(
+          'SELECT * FROM customers WHERE customer_code = $1',
+          [customerCode]
+        );
+
+        if (existing.rows[0]) {
+          const existingCustomer = existing.rows[0];
+          const needsRouteFix =
+            String(existingCustomer.route_number || '') !== routeNumber ||
+            String(existingCustomer.area || '') !== area;
+
+          if (!updateExisting || !needsRouteFix) {
+            summary.skipped++;
+            continue;
+          }
+
+          await pool.query(
+            `UPDATE customers
+             SET route_number = $1,
+                 area = $2,
+                 notes = CASE
+                   WHEN COALESCE(notes, '') = '' THEN $3
+                   ELSE notes
+                 END
+             WHERE id = $4`,
+            [
+              routeNumber,
+              area,
+              notes || 'Route corrected by bulk customer import',
+              existingCustomer.id
+            ]
+          );
+          summary.updated++;
+          continue;
+        }
+
+        await pool.query(
+          `INSERT INTO customers
+           (customer_code, name, route_number, area, customer_type, current_balance, credit_limit, contact_phone, location_link, notes)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+          [
+            customerCode,
+            name,
+            routeNumber,
+            area,
+            customerType,
+            Number(item.current_balance || 0),
+            Number(item.credit_limit || 0),
+            contactPhone,
+            locationLink,
+            notes || 'Bulk imported to route 950; verify phone, location, and full name.'
+          ]
+        );
+        summary.created++;
+      } catch (error) {
+        summary.errors.push({ customer_code: customerCode, message: error.message });
+      }
+    }
+
+    res.status(201).json({
+      message: `Import complete: ${summary.created} created, ${summary.updated} updated, ${summary.skipped} skipped, ${summary.invalid} invalid.`,
+      summary
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Failed to import customers' });
+  }
+});
+
 app.patch('/admin/customers/:id', async (req, res) => {
   try {
     const { id } = req.params;

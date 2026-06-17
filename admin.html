@@ -258,6 +258,44 @@
       color: var(--warning);
     }
 
+    .bulk-import {
+      background: #f8fbff;
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      margin: 12px 0 16px;
+      padding: 12px;
+    }
+
+    .bulk-import h3 {
+      font-size: 15px;
+      margin: 0 0 8px;
+    }
+
+    .bulk-import textarea {
+      min-height: 130px;
+    }
+
+    .inline-fields {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: 120px minmax(160px, 1fr) auto;
+      margin: 10px 0;
+    }
+
+    .check-row {
+      align-items: center;
+      color: var(--muted);
+      display: flex;
+      font-size: 13px;
+      gap: 8px;
+      margin: 6px 0 10px;
+    }
+
+    .check-row input {
+      min-height: auto;
+      width: auto;
+    }
+
     @media (max-width: 980px) {
       .summary,
       .grid {
@@ -589,6 +627,30 @@
               <button type="submit">Add Customer</button>
             </div>
           </form>
+
+          <div class="bulk-import">
+            <h3>Bulk Import Route Customers</h3>
+            <textarea id="bulkCustomersCsv" placeholder="Paste CSV here: customer_code,customer_type,name_from_photo,route_number,area,contact_phone,location_link,latitude,longitude,manager_action,source_photo"></textarea>
+            <div class="inline-fields">
+              <div>
+                <label for="bulk_route_number">Route</label>
+                <input id="bulk_route_number" value="950">
+              </div>
+              <div>
+                <label for="bulk_area">Area</label>
+                <input id="bulk_area" value="Wadi Laban, Riyadh">
+              </div>
+              <div>
+                <label>&nbsp;</label>
+                <button type="button" onclick="importBulkCustomers()">Import Customers</button>
+              </div>
+            </div>
+            <label class="check-row" for="bulk_update_existing">
+              <input id="bulk_update_existing" type="checkbox" checked>
+              Move existing customer codes to this route/area without changing their names.
+            </label>
+            <div class="status" id="bulkImportStatus">Paste the Route 950 CSV, then import after manager review.</div>
+          </div>
 
           <div class="table-wrap">
             <table>
@@ -950,6 +1012,76 @@
 
     function formData(form) {
       return Object.fromEntries(new FormData(form).entries());
+    }
+
+    function parseCsvText(text) {
+      const rows = [];
+      let row = [];
+      let value = '';
+      let quoted = false;
+
+      for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        const next = text[i + 1];
+
+        if (quoted) {
+          if (char === '"' && next === '"') {
+            value += '"';
+            i++;
+          } else if (char === '"') {
+            quoted = false;
+          } else {
+            value += char;
+          }
+          continue;
+        }
+
+        if (char === '"') {
+          quoted = true;
+        } else if (char === ',') {
+          row.push(value);
+          value = '';
+        } else if (char === '\n') {
+          row.push(value);
+          rows.push(row);
+          row = [];
+          value = '';
+        } else if (char !== '\r') {
+          value += char;
+        }
+      }
+
+      if (value || row.length) {
+        row.push(value);
+        rows.push(row);
+      }
+
+      return rows.filter((item) => item.some((cell) => String(cell || '').trim()));
+    }
+
+    function normalizeBulkHeader(value) {
+      return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+    }
+
+    function csvToCustomerObjects(text) {
+      const rows = parseCsvText(text);
+      if (rows.length < 2) return [];
+
+      const headers = rows[0].map(normalizeBulkHeader);
+      return rows.slice(1).map((row) => {
+        const item = {};
+        headers.forEach((header, index) => {
+          item[header] = row[index] || '';
+        });
+
+        item.customer_code = item.customer_code || item.code || item.customer_id || '';
+        item.customer_type = item.customer_type || item.type || 'C';
+        item.name = item.name || item.customer_name || item.name_from_photo || '';
+        item.contact_phone = item.contact_phone || item.phone || '';
+        item.location_link = item.location_link || item.google_maps_link || item.map_link || '';
+        item.notes = item.notes || item.manager_action || '';
+        return item;
+      }).filter((item) => item.customer_code && item.name);
     }
 
     function updateSummary() {
@@ -1338,6 +1470,45 @@
         document.getElementById('credit_limit').value = 0;
         await loadAll();
       } catch (error) {
+        setStatus(error.message, 'error');
+      }
+    }
+
+    async function importBulkCustomers() {
+      const status = document.getElementById('bulkImportStatus');
+      const csvText = document.getElementById('bulkCustomersCsv').value;
+      const customersToImport = csvToCustomerObjects(csvText);
+      const routeNumber = document.getElementById('bulk_route_number').value.trim() || '950';
+      const area = document.getElementById('bulk_area').value.trim() || 'Wadi Laban, Riyadh';
+      const updateExisting = document.getElementById('bulk_update_existing').checked;
+
+      if (customersToImport.length === 0) {
+        status.textContent = 'No valid customer rows found. Keep the header row and customer_code/name columns.';
+        status.className = 'status error';
+        return;
+      }
+
+      if (!confirm(`Import ${customersToImport.length} customers to Route ${routeNumber}?`)) return;
+
+      try {
+        status.textContent = 'Importing customers...';
+        status.className = 'status';
+        const result = await api('/admin/customers/bulk', {
+          method: 'POST',
+          body: JSON.stringify({
+            customers: customersToImport,
+            route_number: routeNumber,
+            area,
+            update_existing: updateExisting
+          })
+        });
+
+        status.textContent = result.message;
+        status.className = result.summary && result.summary.errors.length ? 'status warning' : 'status';
+        await loadAll();
+      } catch (error) {
+        status.textContent = error.message;
+        status.className = 'status error';
         setStatus(error.message, 'error');
       }
     }
