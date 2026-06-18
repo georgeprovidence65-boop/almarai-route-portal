@@ -55,7 +55,15 @@ async function setupDatabase() {
       CREATE TABLE IF NOT EXISTS orders (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id),
+        customer_name VARCHAR(150) DEFAULT '',
+        customer_phone VARCHAR(30) DEFAULT '',
+        route_number VARCHAR(30) DEFAULT '',
         total_amount NUMERIC(10, 2) DEFAULT 0,
+        payment_method VARCHAR(40) DEFAULT 'Cash',
+        invoice_number VARCHAR(40) DEFAULT '',
+        invoice_notes TEXT DEFAULT '',
+        created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_by_role VARCHAR(30) DEFAULT '',
         status VARCHAR(30) DEFAULT 'Pending',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -223,6 +231,33 @@ async function setupDatabase() {
 
       ALTER TABLE users
       ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
+
+      ALTER TABLE orders
+      ADD COLUMN IF NOT EXISTS customer_id INTEGER REFERENCES customers(id) ON DELETE SET NULL;
+
+      ALTER TABLE orders
+      ADD COLUMN IF NOT EXISTS customer_name VARCHAR(150) DEFAULT '';
+
+      ALTER TABLE orders
+      ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(30) DEFAULT '';
+
+      ALTER TABLE orders
+      ADD COLUMN IF NOT EXISTS route_number VARCHAR(30) DEFAULT '';
+
+      ALTER TABLE orders
+      ADD COLUMN IF NOT EXISTS payment_method VARCHAR(40) DEFAULT 'Cash';
+
+      ALTER TABLE orders
+      ADD COLUMN IF NOT EXISTS invoice_number VARCHAR(40) DEFAULT '';
+
+      ALTER TABLE orders
+      ADD COLUMN IF NOT EXISTS invoice_notes TEXT DEFAULT '';
+
+      ALTER TABLE orders
+      ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES users(id) ON DELETE SET NULL;
+
+      ALTER TABLE orders
+      ADD COLUMN IF NOT EXISTS created_by_role VARCHAR(30) DEFAULT '';
 
       ALTER TABLE stock_transfers
       ADD COLUMN IF NOT EXISTS from_salesman_id INTEGER REFERENCES users(id) ON DELETE SET NULL;

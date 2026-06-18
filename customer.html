@@ -244,6 +244,11 @@
       font-weight: 700;
     }
 
+    .cart-payment {
+      display: grid;
+      gap: 6px;
+    }
+
     .order-status {
       color: var(--muted);
       font-size: 13px;
@@ -547,6 +552,7 @@
     let products = [];
     let cart = {};
     let activeCategory = 'All';
+    let currentProfile = null;
     let selectedCustomer = null;
     let proximityTimer = null;
     const seenAlerts = new Set(JSON.parse(localStorage.getItem('almaraiSeenDeliveryAlerts') || '[]'));
@@ -671,6 +677,16 @@
           <span>Total</span>
           <span>${total.toFixed(2)} SAR</span>
         </div>
+        <div class="cart-payment">
+          <label for="orderPaymentMethod">Means of Pay</label>
+          <select id="orderPaymentMethod">
+            <option value="Cash">Cash</option>
+            <option value="Credit">Credit</option>
+            <option value="Mada/Card">Mada/Card</option>
+            <option value="Bank Transfer">Bank Transfer</option>
+            <option value="On Account">On Account</option>
+          </select>
+        </div>
         <button type="button" onclick="submitOrder()">Submit Order</button>
         <div class="order-status" id="orderStatus"></div>
       `;
@@ -709,7 +725,14 @@
       try {
         const result = await api('/orders-with-items', {
           method: 'POST',
-          body: JSON.stringify({ items })
+          body: JSON.stringify({
+            items,
+            customer_id: selectedCustomer?.id || null,
+            customer_name: selectedCustomer?.name || currentProfile?.full_name || '',
+            customer_phone: selectedCustomer?.contact_phone || currentProfile?.phone || '',
+            route_number: selectedCustomer?.route_number || currentProfile?.route_number || '',
+            payment_method: document.getElementById('orderPaymentMethod')?.value || 'Cash'
+          })
         });
 
         cart = {};
@@ -732,7 +755,12 @@
       const status = document.getElementById('backendStatus');
 
       try {
-        products = await api('/products');
+        const [profile, loadedProducts] = await Promise.all([
+          api('/profile'),
+          api('/products')
+        ]);
+        currentProfile = profile;
+        products = loadedProducts;
         status.className = 'status success';
         status.innerHTML = '<strong>Backend:</strong> Connected';
         renderCategories();

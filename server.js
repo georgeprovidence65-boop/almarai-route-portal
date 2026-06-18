@@ -147,6 +147,209 @@ function canAccessCustomerRecord(user, customer) {
   return user.role === 'customer' && phonesMatch(user.phone, customer.contact_phone);
 }
 
+function normalizePaymentMethod(value) {
+  const paymentMethod = String(value || '').trim();
+  const allowed = ['Cash', 'Credit', 'Mada/Card', 'Bank Transfer', 'On Account'];
+  return allowed.includes(paymentMethod) ? paymentMethod : 'Cash';
+}
+
+function invoiceNumberFor(orderId) {
+  const date = new Date().toISOString().slice(0, 10).replaceAll('-', '');
+  return `ALM-${date}-${String(orderId).padStart(5, '0')}`;
+}
+
+async function ensureRuntimeSchema() {
+  await pool.query(`
+    ALTER TABLE orders
+    ADD COLUMN IF NOT EXISTS customer_id INTEGER REFERENCES customers(id) ON DELETE SET NULL;
+
+    ALTER TABLE orders
+    ADD COLUMN IF NOT EXISTS customer_name VARCHAR(150) DEFAULT '';
+
+    ALTER TABLE orders
+    ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(30) DEFAULT '';
+
+    ALTER TABLE orders
+    ADD COLUMN IF NOT EXISTS route_number VARCHAR(30) DEFAULT '';
+
+    ALTER TABLE orders
+    ADD COLUMN IF NOT EXISTS payment_method VARCHAR(40) DEFAULT 'Cash';
+
+    ALTER TABLE orders
+    ADD COLUMN IF NOT EXISTS invoice_number VARCHAR(40) DEFAULT '';
+
+    ALTER TABLE orders
+    ADD COLUMN IF NOT EXISTS invoice_notes TEXT DEFAULT '';
+
+    ALTER TABLE orders
+    ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES users(id) ON DELETE SET NULL;
+
+    ALTER TABLE orders
+    ADD COLUMN IF NOT EXISTS created_by_role VARCHAR(30) DEFAULT '';
+  `);
+}
+
+async function getCustomerForOrder(customerId) {
+  if (!customerId) return null;
+
+  const result = await pool.query(
+    `SELECT id, customer_code, name, route_number, area, customer_type, contact_phone
+     FROM customers
+     WHERE id = $1`,
+    [customerId]
+  );
+
+  return result.rows[0] || null;
+}
+
+async function createOrderWithItems({
+  userId,
+  createdBy,
+  createdByRole,
+  items,
+  customer,
+  customerName,
+  customerPhone,
+  routeNumber,
+  paymentMethod,
+  invoiceNotes,
+  status,
+  recordStockRoute
+}) {
+  if (!Array.isArray(items) || items.length === 0) {
+    const error = new Error('At least one order item is required');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    let totalAmount = 0;
+    const orderItems = [];
+
+    for (const item of items) {
+      const productResult = await client.query(
+        'SELECT * FROM products WHERE id = $1',
+        [item.product_id]
+      );
+
+      if (productResult.rows.length === 0) {
+        const error = new Error(`Product ${item.product_id} not found`);
+        error.statusCode = 404;
+        throw error;
+      }
+
+      const product = productResult.rows[0];
+      const quantity = Math.floor(Number(item.quantity || 0));
+
+      if (quantity <= 0) {
+        const error = new Error('Item quantity must be greater than zero');
+        error.statusCode = 400;
+        throw error;
+      }
+
+      const price = Number(product.price || 0);
+      totalAmount += price * quantity;
+      orderItems.push({
+        product,
+        productId: product.id,
+        productName: product.name,
+        quantity,
+        price,
+        line_total: price * quantity
+      });
+    }
+
+    const orderResult = await client.query(
+      `INSERT INTO orders
+       (user_id, customer_id, customer_name, customer_phone, route_number, total_amount, payment_method, invoice_notes, created_by, created_by_role, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       RETURNING *`,
+      [
+        userId || null,
+        customer?.id || null,
+        customer?.name || customerName || '',
+        customer?.contact_phone || customerPhone || '',
+        customer?.route_number || routeNumber || '',
+        totalAmount,
+        normalizePaymentMethod(paymentMethod),
+        invoiceNotes || '',
+        createdBy || null,
+        createdByRole || '',
+        status || 'Pending'
+      ]
+    );
+
+    let order = orderResult.rows[0];
+    const invoiceNumber = invoiceNumberFor(order.id);
+
+    const invoiceResult = await client.query(
+      `UPDATE orders
+       SET invoice_number = $1
+       WHERE id = $2
+       RETURNING *`,
+      [invoiceNumber, order.id]
+    );
+
+    order = invoiceResult.rows[0];
+
+    for (const item of orderItems) {
+      await client.query(
+        `INSERT INTO order_items (order_id, product_id, quantity, price)
+         VALUES ($1, $2, $3, $4)`,
+        [order.id, item.productId, item.quantity, item.price]
+      );
+
+      if (recordStockRoute) {
+        const today = new Date().toISOString().slice(0, 10);
+        await client.query(
+          `INSERT INTO route_stock (route_number, product_id, stock_date)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (route_number, product_id, stock_date) DO NOTHING`,
+          [recordStockRoute, item.productId, today]
+        );
+
+        await client.query(
+          `UPDATE route_stock
+           SET delivered_quantity = delivered_quantity + $1,
+               closing_quantity = opening_quantity + received_quantity + transferred_in_quantity + returned_quantity - transferred_out_quantity - delivered_quantity
+           WHERE route_number = $2
+             AND product_id = $3
+             AND stock_date = $4`,
+          [item.quantity, recordStockRoute, item.productId, today]
+        );
+
+        await client.query(
+          `UPDATE route_stock
+           SET closing_quantity = opening_quantity + received_quantity + transferred_in_quantity + returned_quantity - transferred_out_quantity - delivered_quantity
+           WHERE route_number = $1
+             AND product_id = $2
+             AND stock_date = $3`,
+          [recordStockRoute, item.productId, today]
+        );
+
+        await client.query(
+          `INSERT INTO stock_movements
+           (route_number, product_id, movement_type, quantity, reference_type, reference_id, notes, created_by)
+           VALUES ($1, $2, 'delivered', $3, 'invoice', $4, $5, $6)`,
+          [recordStockRoute, item.productId, item.quantity, order.id, `Invoice ${invoiceNumber}`, createdBy || null]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+    return { order, items: orderItems };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 app.get('/', (req, res) => {
   res.send('ALMARAI VERSION 1000');
 });
@@ -910,18 +1113,38 @@ app.patch('/customer/proximity-alerts/:id/acknowledge', authenticateToken, async
 
 app.post('/orders', authenticateToken, async (req, res) => {
   try {
-    const { total_amount } = req.body;
+    const { total_amount, payment_method, customer_name, customer_phone, route_number } = req.body;
+    const paymentMethod = normalizePaymentMethod(payment_method);
 
     const result = await pool.query(
-      `INSERT INTO orders (user_id, total_amount)
-       VALUES ($1, $2)
+      `INSERT INTO orders
+       (user_id, customer_name, customer_phone, route_number, total_amount, payment_method, created_by, created_by_role)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
-      [req.user.id, total_amount]
+      [
+        req.user.id,
+        customer_name || '',
+        customer_phone || '',
+        route_number || '',
+        total_amount || 0,
+        paymentMethod,
+        req.user.id,
+        req.user.role || ''
+      ]
+    );
+
+    const invoiceNumber = invoiceNumberFor(result.rows[0].id);
+    const invoiceResult = await pool.query(
+      `UPDATE orders
+       SET invoice_number = $1
+       WHERE id = $2
+       RETURNING *`,
+      [invoiceNumber, result.rows[0].id]
     );
 
     res.status(201).json({
       message: 'Order created successfully',
-      order: result.rows[0]
+      order: invoiceResult.rows[0]
     });
   } catch (error) {
     console.error(error);
@@ -931,62 +1154,102 @@ app.post('/orders', authenticateToken, async (req, res) => {
 
 app.post('/orders-with-items', authenticateToken, async (req, res) => {
   try {
-    const { items } = req.body;
+    const {
+      items,
+      customer_id,
+      customer_name,
+      customer_phone,
+      route_number,
+      payment_method,
+      invoice_notes
+    } = req.body;
+    const customer = await getCustomerForOrder(customer_id);
 
-    if (!Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ message: 'At least one order item is required' });
+    if (customer_id && !customer) {
+      return res.status(404).json({ message: 'Customer not found' });
     }
 
-    let totalAmount = 0;
-    const orderItems = [];
-
-    for (const item of items) {
-      const productResult = await pool.query(
-        'SELECT * FROM products WHERE id = $1',
-        [item.product_id]
-      );
-
-      if (productResult.rows.length === 0) {
-        return res.status(404).json({
-          message: `Product ${item.product_id} not found`
-        });
-      }
-
-      const product = productResult.rows[0];
-      const quantity = Number(item.quantity || 0);
-
-      if (quantity <= 0) {
-        return res.status(400).json({ message: 'Item quantity must be greater than zero' });
-      }
-
-      totalAmount += Number(product.price) * quantity;
-      orderItems.push({ product, quantity, productId: item.product_id });
+    if (customer && req.user.role === 'customer' && !canAccessCustomerRecord(req.user, customer)) {
+      return res.status(403).json({ message: 'You can only order for your own customer account' });
     }
 
-    const orderResult = await pool.query(
-      `INSERT INTO orders (user_id, total_amount)
-       VALUES ($1, $2)
-       RETURNING *`,
-      [req.user.id, totalAmount]
-    );
-
-    const order = orderResult.rows[0];
-
-    for (const item of orderItems) {
-      await pool.query(
-        `INSERT INTO order_items (order_id, product_id, quantity, price)
-         VALUES ($1, $2, $3, $4)`,
-        [order.id, item.productId, item.quantity, item.product.price]
-      );
-    }
+    const { order, items: orderItems } = await createOrderWithItems({
+      userId: req.user.role === 'customer' ? req.user.id : null,
+      createdBy: req.user.id,
+      createdByRole: req.user.role || '',
+      items,
+      customer,
+      customerName: customer_name,
+      customerPhone: customer_phone,
+      routeNumber: route_number,
+      paymentMethod: payment_method,
+      invoiceNotes: invoice_notes,
+      status: 'Pending'
+    });
 
     res.status(201).json({
       message: 'Order with items created successfully',
-      order
+      order,
+      items: orderItems
     });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: 'Error creating order' });
+    res.status(error.statusCode || 500).json({ message: error.statusCode ? error.message : 'Error creating order' });
+  }
+});
+
+app.post('/salesman/invoices', authenticateToken, async (req, res) => {
+  try {
+    if (!['salesman', 'manager', 'admin'].includes(req.user.role)) {
+      return res.status(403).json({ message: 'Salesman access required' });
+    }
+
+    const {
+      customer_id,
+      items,
+      payment_method,
+      invoice_notes
+    } = req.body;
+    const customer = await getCustomerForOrder(customer_id);
+
+    if (!customer) {
+      return res.status(404).json({ message: 'Choose a valid customer before creating an invoice' });
+    }
+
+    if (
+      req.user.role === 'salesman'
+      && req.user.route_number
+      && String(req.user.route_number) !== String(customer.route_number)
+    ) {
+      return res.status(403).json({ message: 'You can only invoice customers on your route' });
+    }
+
+    const recordStockRoute = customer.route_number || req.user.route_number || '950';
+    const { order, items: orderItems } = await createOrderWithItems({
+      userId: null,
+      createdBy: req.user.id,
+      createdByRole: req.user.role || '',
+      items,
+      customer,
+      paymentMethod: payment_method,
+      invoiceNotes: invoice_notes,
+      status: 'Invoiced',
+      recordStockRoute
+    });
+
+    res.status(201).json({
+      message: 'Invoice created successfully',
+      invoice: {
+        ...order,
+        customer_code: customer.customer_code,
+        customer_type: customer.customer_type,
+        area: customer.area,
+        items: orderItems
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(error.statusCode || 500).json({ message: error.statusCode ? error.message : 'Failed to create invoice' });
   }
 });
 
@@ -1036,13 +1299,21 @@ app.get('/admin/orders', async (req, res) => {
       SELECT
         orders.id,
         orders.user_id,
-        users.full_name AS customer_name,
-        users.phone AS customer_phone,
+        orders.invoice_number,
+        COALESCE(NULLIF(orders.customer_name, ''), customers.name, users.full_name, '') AS customer_name,
+        COALESCE(NULLIF(orders.customer_phone, ''), customers.contact_phone, users.phone, '') AS customer_phone,
+        COALESCE(NULLIF(orders.route_number, ''), customers.route_number, '') AS route_number,
+        orders.payment_method,
+        orders.invoice_notes,
+        creator.full_name AS created_by_name,
+        orders.created_by_role,
         orders.total_amount,
         orders.status,
         orders.created_at
       FROM orders
       LEFT JOIN users ON users.id = orders.user_id
+      LEFT JOIN customers ON customers.id = orders.customer_id
+      LEFT JOIN users creator ON creator.id = orders.created_by
       ORDER BY orders.id DESC
     `);
 
@@ -2363,6 +2634,17 @@ app.patch('/salesman/transfers/:id/status', authenticateToken, async (req, res) 
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+async function startServer() {
+  try {
+    await ensureRuntimeSchema();
+    console.log('Runtime schema check complete.');
+  } catch (error) {
+    console.error('Runtime schema check failed:', error.message);
+  }
+
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
+
+startServer();

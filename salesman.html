@@ -475,6 +475,54 @@
       white-space: nowrap;
     }
 
+    .invoice-form {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: 1.4fr 1.4fr 90px 150px minmax(150px, 1fr) auto auto;
+    }
+
+    .invoice-form input,
+    .invoice-form select {
+      min-width: 0;
+      width: 100%;
+    }
+
+    .invoice-cart,
+    .invoice-preview {
+      display: grid;
+      gap: 8px;
+    }
+
+    .invoice-line {
+      align-items: center;
+      background: #fbfcfa;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      display: grid;
+      gap: 8px;
+      grid-template-columns: minmax(0, 1fr) auto auto auto;
+      padding: 10px;
+    }
+
+    .invoice-line strong {
+      display: block;
+      font-size: 14px;
+    }
+
+    .invoice-total {
+      align-items: center;
+      display: flex;
+      justify-content: space-between;
+      font-weight: 700;
+      padding: 4px 2px;
+    }
+
+    .invoice-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
     .positive {
       color: #08783a;
       font-weight: 700;
@@ -500,6 +548,11 @@
       }
 
       .truck-stock-card {
+        grid-template-columns: 1fr;
+      }
+
+      .invoice-form,
+      .invoice-line {
         grid-template-columns: 1fr;
       }
 
@@ -823,6 +876,29 @@
     </section>
 
     <section class="panel">
+      <h2>Create Customer Invoice</h2>
+      <div class="panel-body">
+        <form id="invoiceForm" class="invoice-form">
+          <select id="invoiceCustomer"></select>
+          <select id="invoiceProduct"></select>
+          <input id="invoiceQuantity" type="number" min="1" value="1" inputmode="numeric">
+          <select id="invoicePaymentMethod">
+            <option value="Cash">Cash</option>
+            <option value="Credit">Credit</option>
+            <option value="Mada/Card">Mada/Card</option>
+            <option value="Bank Transfer">Bank Transfer</option>
+            <option value="On Account">On Account</option>
+          </select>
+          <input id="invoiceNotes" placeholder="Invoice notes">
+          <button type="button" onclick="addInvoiceProduct()">Add Product</button>
+          <button type="submit">Create Invoice</button>
+        </form>
+        <div id="invoiceCart" class="invoice-cart"></div>
+        <div id="invoicePreview" class="invoice-preview"></div>
+      </div>
+    </section>
+
+    <section class="panel">
       <h2>After Duty - End Of Day Summary</h2>
       <div class="panel-body">
         <div class="stock-grid">
@@ -886,6 +962,8 @@
     let visited = JSON.parse(localStorage.getItem(visitStorageKey) || '{}');
     let transfers = [];
     let routeStock = [];
+    let invoiceCart = [];
+    let lastInvoice = null;
     let locationWatchId = null;
 
     function escapeHtml(value) {
@@ -951,6 +1029,14 @@
 
     function cleanPhone(phone) {
       return String(phone || '').replace(/[^\d]/g, '');
+    }
+
+    function whatsappPhone(phone) {
+      const digits = cleanPhone(phone);
+      if (digits.startsWith('00')) return digits.slice(2);
+      if (digits.startsWith('05')) return `966${digits.slice(1)}`;
+      if (digits.startsWith('5')) return `966${digits}`;
+      return digits;
     }
 
     function customerMatches(customer) {
@@ -1338,6 +1424,243 @@
       }
     }
 
+    function productChoicesForInvoice() {
+      const byId = new Map(products.map((product) => [Number(product.id), product]));
+      const stockChoices = routeStock
+        .filter((stock) => stock.product_id)
+        .map((stock) => {
+          const product = byId.get(Number(stock.product_id)) || {};
+          return {
+            ...product,
+            id: Number(stock.product_id),
+            name: product.name || stock.product_name || `Product #${stock.product_id}`,
+            price: Number(product.price || 0),
+            closing_quantity: Number(stock.closing_quantity || 0)
+          };
+        });
+
+      return stockChoices.length > 0 ? stockChoices : products;
+    }
+
+    function renderInvoiceOptions() {
+      const customerSelect = document.getElementById('invoiceCustomer');
+      const productSelect = document.getElementById('invoiceProduct');
+      if (!customerSelect || !productSelect) return;
+
+      const routeCustomers = customers.filter((customer) => !currentRoute || customer.route_number === currentRoute);
+      const currentCustomer = customerSelect.value;
+      const currentProduct = productSelect.value;
+
+      customerSelect.innerHTML = routeCustomers.length
+        ? routeCustomers.map((customer) => `
+            <option value="${customer.id}">${escapeHtml(customer.customer_code)} - ${escapeHtml(customer.name)}</option>
+          `).join('')
+        : '<option value="">No route customers loaded</option>';
+
+      const productChoices = productChoicesForInvoice();
+      productSelect.innerHTML = productChoices.length
+        ? productChoices.map((product) => {
+            const stockLabel = product.closing_quantity === undefined ? '' : ` | truck ${product.closing_quantity}`;
+            return `<option value="${product.id}">${escapeHtml(product.name)} - ${Number(product.price || 0).toFixed(2)} SAR${escapeHtml(stockLabel)}</option>`;
+          }).join('')
+        : '<option value="">No products loaded</option>';
+
+      if (currentCustomer && routeCustomers.some((customer) => String(customer.id) === currentCustomer)) {
+        customerSelect.value = currentCustomer;
+      }
+
+      if (currentProduct && productChoices.some((product) => String(product.id) === currentProduct)) {
+        productSelect.value = currentProduct;
+      }
+    }
+
+    function renderInvoiceCart() {
+      const target = document.getElementById('invoiceCart');
+      if (!target) return;
+
+      if (invoiceCart.length === 0) {
+        target.innerHTML = '<div class="empty">Add invoice products from the truck stock list.</div>';
+        return;
+      }
+
+      const total = invoiceCart.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0), 0);
+      target.innerHTML = `
+        ${invoiceCart.map((item, index) => `
+          <div class="invoice-line">
+            <div>
+              <strong>${escapeHtml(item.name)}</strong>
+              <span class="details">${Number(item.price || 0).toFixed(2)} SAR each</span>
+            </div>
+            <span>Qty ${escapeHtml(item.quantity)}</span>
+            <span>${Number(item.line_total || 0).toFixed(2)} SAR</span>
+            <button type="button" class="light" onclick="removeInvoiceProduct(${index})">Remove</button>
+          </div>
+        `).join('')}
+        <div class="invoice-total">
+          <span>Total</span>
+          <span>${total.toFixed(2)} SAR</span>
+        </div>
+      `;
+    }
+
+    function renderInvoicePreview() {
+      const target = document.getElementById('invoicePreview');
+      if (!target) return;
+
+      if (!lastInvoice) {
+        target.innerHTML = '';
+        return;
+      }
+
+      target.innerHTML = `
+        <div class="status success">
+          <strong>Invoice ${escapeHtml(lastInvoice.invoice_number)}</strong><br>
+          ${escapeHtml(lastInvoice.customer_name || '')} | ${escapeHtml(lastInvoice.payment_method || '')} |
+          ${Number(lastInvoice.total_amount || 0).toFixed(2)} SAR
+        </div>
+        <div class="invoice-actions">
+          <button type="button" onclick="printLastInvoice()">Print Invoice</button>
+          <button type="button" class="secondary" onclick="sendLastInvoiceWhatsApp()">Send WhatsApp</button>
+        </div>
+      `;
+    }
+
+    function addInvoiceProduct() {
+      const productId = Number(document.getElementById('invoiceProduct')?.value || 0);
+      const quantity = Math.max(1, Math.floor(Number(document.getElementById('invoiceQuantity')?.value || 1)));
+      const product = productChoicesForInvoice().find((item) => Number(item.id) === productId);
+
+      if (!product) {
+        alert('Choose a product first.');
+        return;
+      }
+
+      const existing = invoiceCart.find((item) => Number(item.product_id) === productId);
+      if (existing) {
+        existing.quantity += quantity;
+        existing.line_total = Number(existing.price || 0) * existing.quantity;
+      } else {
+        invoiceCart.push({
+          product_id: product.id,
+          name: product.name,
+          price: Number(product.price || 0),
+          quantity,
+          line_total: Number(product.price || 0) * quantity
+        });
+      }
+
+      document.getElementById('invoiceQuantity').value = '1';
+      renderInvoiceCart();
+    }
+
+    function removeInvoiceProduct(index) {
+      invoiceCart.splice(index, 1);
+      renderInvoiceCart();
+    }
+
+    function invoiceText(invoice) {
+      const lines = (invoice.items || []).map((item) => {
+        const lineTotal = Number(item.line_total || 0).toFixed(2);
+        return `- ${item.productName || item.product_name || item.name}: ${item.quantity} x ${Number(item.price || 0).toFixed(2)} = ${lineTotal} SAR`;
+      });
+
+      return [
+        'Almarai Invoice',
+        `Invoice: ${invoice.invoice_number}`,
+        `Date: ${new Date(invoice.created_at || Date.now()).toLocaleString()}`,
+        `Customer: ${invoice.customer_name || ''}`,
+        invoice.customer_code ? `Customer ID: ${invoice.customer_code}` : '',
+        `Route: ${invoice.route_number || currentRoute || ''}`,
+        `Payment: ${invoice.payment_method || 'Cash'}`,
+        '',
+        ...lines,
+        '',
+        `Total: ${Number(invoice.total_amount || 0).toFixed(2)} SAR`,
+        invoice.invoice_notes ? `Notes: ${invoice.invoice_notes}` : '',
+        '',
+        'Thank you.'
+      ].filter(Boolean).join('\n');
+    }
+
+    function printLastInvoice() {
+      if (!lastInvoice) return;
+      const text = invoiceText(lastInvoice);
+      const win = window.open('', '_blank');
+      if (!win) {
+        alert('Popup blocked. Allow popups to print the invoice.');
+        return;
+      }
+
+      win.document.write(`
+        <html>
+          <head>
+            <title>${escapeHtml(lastInvoice.invoice_number)}</title>
+            <style>
+              body { font-family: Arial, sans-serif; padding: 24px; color: #15212d; }
+              pre { white-space: pre-wrap; font-size: 15px; line-height: 1.55; }
+            </style>
+          </head>
+          <body>
+            <pre>${escapeHtml(text)}</pre>
+          </body>
+        </html>
+      `);
+      win.document.close();
+      win.focus();
+      win.print();
+    }
+
+    function sendLastInvoiceWhatsApp() {
+      if (!lastInvoice) return;
+      const phone = whatsappPhone(lastInvoice.customer_phone);
+
+      if (!phone) {
+        alert('This customer has no WhatsApp phone number saved.');
+        return;
+      }
+
+      window.open(`https://wa.me/${phone}?text=${encodeURIComponent(invoiceText(lastInvoice))}`, '_blank');
+    }
+
+    async function submitInvoice(event) {
+      event.preventDefault();
+      const customerId = Number(document.getElementById('invoiceCustomer')?.value || 0);
+
+      if (!customerId) {
+        alert('Choose a customer first.');
+        return;
+      }
+
+      if (invoiceCart.length === 0) {
+        alert('Add at least one product to the invoice.');
+        return;
+      }
+
+      try {
+        const result = await api('/salesman/invoices', {
+          method: 'POST',
+          body: JSON.stringify({
+            customer_id: customerId,
+            items: invoiceCart.map((item) => ({
+              product_id: item.product_id,
+              quantity: item.quantity
+            })),
+            payment_method: document.getElementById('invoicePaymentMethod')?.value || 'Cash',
+            invoice_notes: document.getElementById('invoiceNotes')?.value || ''
+          })
+        });
+
+        lastInvoice = result.invoice;
+        invoiceCart = [];
+        document.getElementById('invoiceNotes').value = '';
+        renderInvoiceCart();
+        renderInvoicePreview();
+        await loadAll();
+      } catch (error) {
+        alert(`Could not create invoice: ${error.message}`);
+      }
+    }
+
     async function createTransfer(payload) {
       await api('/salesman/transfers', {
         method: 'POST',
@@ -1513,6 +1836,9 @@
       renderTransferHistory();
       renderRouteStock();
       renderProductOptions();
+      renderInvoiceOptions();
+      renderInvoiceCart();
+      renderInvoicePreview();
       renderCustomers();
       renderRequests();
     }
@@ -1596,6 +1922,7 @@
     }
 
     document.getElementById('transferForm').addEventListener('submit', submitTransfer);
+    document.getElementById('invoiceForm').addEventListener('submit', submitInvoice);
     if (requireRole(['salesman'])) {
       loadAll();
     }
